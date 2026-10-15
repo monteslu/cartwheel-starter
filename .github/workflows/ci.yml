@@ -1,0 +1,185 @@
+name: CI
+
+# Every push: build and test the game on Linux, macOS and Windows, and
+# package it for every platform. A v* tag (./release.sh v0.1.0) also
+# publishes the packages as a GitHub release.
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: linux-x64, os: ubuntu-24.04, test: true }
+          - { target: linux-arm64, os: ubuntu-24.04-arm, test: true }
+          - { target: macos-arm64, os: macos-15, test: true }
+          - { target: windows-x64, os: ubuntu-24.04, test: false } # tested on Windows below
+          - { target: android-arm64, os: ubuntu-24.04, test: false } # launched on an emulator below
+          - { target: wasc, os: ubuntu-24.04, test: false }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Tools (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake ninja-build squashfs-tools zip \
+            libegl1 libegl-mesa0 libgles2 libgl1-mesa-dri mesa-vulkan-drivers libvulkan1
+      - name: Tools (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja
+      - name: Android SDK and NDK
+        if: matrix.target == 'android-arm64'
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.2.12479018" "platforms;android-36" "build-tools;36.0.0" >/dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+      - uses: actions/cache@v6
+        with:
+          path: deps
+          key: deps-${{ matrix.target }}-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/deps.lock') }}
+      - name: Build
+        if: matrix.test
+        run: ./build.sh
+      - name: Test
+        if: matrix.test
+        run: ./test.sh
+      - name: Screenshot
+        if: matrix.test
+        run: ./shot.sh
+      - uses: actions/upload-artifact@v7
+        if: matrix.test && always()
+        with:
+          name: shot-${{ matrix.target }}
+          path: out/
+          retention-days: 14
+      - name: Package
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then v="${GITHUB_REF_NAME#v}"; else v="0.0.0-${GITHUB_SHA::7}"; fi
+          scripts/package.sh ${{ matrix.target }} "$v"
+      - name: Test bundle (for the Windows runner)
+        if: matrix.target == 'windows-x64'
+        run: |
+          mkdir -p out/bundle/build/native
+          cp build/windows-x64/gemdash_auto.exe build/windows-x64/gemdash_auto.cwpak build/windows-x64/*.dll out/bundle/build/native/
+      - uses: actions/upload-artifact@v7
+        if: matrix.target == 'windows-x64'
+        with:
+          name: test-bundle-windows-x64
+          path: out/bundle/
+          retention-days: 7
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ matrix.target }}
+          path: out/release/*
+          if-no-files-found: error
+          retention-days: 30
+
+  windows:
+    name: windows-x64 (run)
+    needs: build
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v7
+        with:
+          name: test-bundle-windows-x64
+          path: .
+      - uses: actions/download-artifact@v7
+        with:
+          name: release-windows-x64
+          path: packages
+      - name: Microsoft's Visual C++ runtime, which Dawn links, into the bundle and the package
+        shell: pwsh
+        run: |
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          $crt = (Get-ChildItem "$vs\VC\Redist\MSVC\*\x64\Microsoft.VC143.CRT" -Directory | Sort-Object FullName | Select-Object -Last 1).FullName
+          $dlls = 'msvcp140.dll','msvcp140_atomic_wait.dll','vcruntime140.dll','vcruntime140_1.dll'
+          foreach ($d in $dlls) { Copy-Item "$crt\$d" build\native\ }
+          foreach ($z in Get-ChildItem packages\*.zip) {
+            $top = $z.BaseName
+            New-Item -ItemType Directory -Force "stage\$top" | Out-Null
+            foreach ($d in $dlls) { Copy-Item "$crt\$d" "stage\$top\" }
+            Push-Location stage; 7z a -tzip $z.FullName "$top\*.dll" | Out-Null; Pop-Location
+          }
+      - name: Test (GL on ANGLE / Direct3D 11, WebGPU on Dawn / Direct3D 12)
+        run: node tests/run.mjs match screenshot
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: shot-windows-x64
+          path: out/
+          retention-days: 14
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-windows-x64-final
+          path: packages/*.zip
+          retention-days: 30
+
+  android:
+    name: android-arm64 (launch)
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: release-android-arm64
+          path: apk
+      - name: KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Launch on an emulator (x86_64 image running the arm64 APK)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          emulator-options: -no-window -no-snapshot -no-audio -no-boot-anim -gpu swiftshader_indirect
+          script: |
+            adb install -r apk/*.apk && adb logcat -c && adb shell monkey -p org.cartwheel.gemdash -c android.intent.category.LAUNCHER 1 && sleep 25 && adb logcat -d -s cartwheel:* | grep -E 'WebGPU|GL:' ; adb shell pidof org.cartwheel.gemdash || (adb logcat -d | tail -60; exit 1)
+
+  release:
+    name: Release
+    needs: [build, windows, android]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: release-*
+          path: release
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir files
+          for d in release/release-*; do
+            case "$d" in */release-windows-x64) continue ;; esac # the final zips come from the Windows job
+            cp "$d"/* files/
+          done
+          ls -l files
+          gh release create "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes files/*
