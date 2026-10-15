@@ -20,7 +20,9 @@ You need git, cmake, ninja, curl, Node.js and a C compiler, on Linux (x64 or
 arm64) or an Apple silicon Mac. Carts build on Linux x64.
 
 The title screen, players joining (one to four, split screen), pause menu,
-settings (graphics, volume, controls), saves and menu sounds come from the
+settings (graphics: a preset, Auto, or render resolution, ambient
+occlusion, shadows, anti-aliasing and effects detail one by one; volume;
+controls), saves and menu sounds come from the
 engine's game shell: a new game writes its gameplay and art. `AGENTS.md`
 describes the layout, the game's structure and how to check work.
 

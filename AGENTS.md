@@ -3,7 +3,7 @@
 A cartwheel game: C, built against a prebuilt engine SDK, running natively
 (Linux, Windows, macOS, Android) and as a `.wasc` cart. The title screen,
 player join, pause menu, settings, saves, menu input, volume, graphics
-presets and split screen are done for you by the engine's shell
+settings and split screen are done for you by the engine's shell
 (`cartwheel/shell.h`). Customise them through `cw_shell_init` in
 `src/main.c`, and put your effort into gameplay and graphics.
 
@@ -58,6 +58,12 @@ missing.
   the menu sounds and music.
 - **saves**: `cw_shell_game_save()` is your save struct; write it and call
   `cw_shell_save_commit()`.
+- **graphics**: Settings > Graphics opens the engine's graphics page
+  (`cartwheel/quality_menu.h`): a preset or Auto, and each setting on its own
+  (render resolution, ambient occlusion, shadows, anti-aliasing, effects
+  detail). Add a setting of the game's own with `cw_quality_lever_add` in
+  `init` and apply it from `cw_quality_on_change`; thin instanced scenery by
+  `cw_quality_density()`. All of it is render-only and saved by the shell.
 
 `gemdash_auto` (CMakeLists.txt) is the same game with `GEMDASH_AUTOPILOT`:
 bots play a two-player match with no input. The tests and screenshots run it.
@@ -91,10 +97,10 @@ Keep an autopilot that exercises your gameplay.
 ## Engine reference
 
 The engine headers are the API reference, for the version pinned in
-`scripts/deps.lock` (v0.6.7):
-<https://github.com/monteslu/cartwheel-engine/tree/v0.6.7/include/cartwheel>,
-guides in <https://github.com/monteslu/cartwheel-engine/tree/v0.6.7/docs/guides>
+`scripts/deps.lock` (v0.7.0):
+<https://github.com/monteslu/cartwheel-engine/tree/v0.7.0/include/cartwheel>,
+guides in <https://github.com/monteslu/cartwheel-engine/tree/v0.7.0/docs/guides>
 (`game-shell.md`, `input.md`, `physics.md`, `rendering-3d.md`), and shipping
-in <https://github.com/monteslu/cartwheel-engine/blob/v0.6.7/docs/shipping.md>.
+in <https://github.com/monteslu/cartwheel-engine/blob/v0.7.0/docs/shipping.md>.
 The same headers are in `deps/cartwheel-sdk/<platform>/include/cartwheel/`
 after the first build.
