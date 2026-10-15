@@ -54,7 +54,6 @@ for (const g of gates) {
     const env = { ...process.env, CW_GPU: gpu, CW_FRAMES: String(g.frames), CW_WARMUP_SPREAD: '0', SDL_AUDIODRIVER: 'dummy', CW_DEBUG_DUMP: dump };
     if (g.screenshot) env.CW_SCREENSHOT = shot;
     if (g.input) env.CW_INPUT = join(ROOT, g.input); // scripted pad / keyboard input
-    if (process.platform === 'darwin') env.CW_TEST_WINDOW = '1'; // ANGLE needs a real window there
     const t0 = Date.now();
     const r = spawnSync(exe(g.app), [], { env, encoding: 'utf8', timeout: 600000 });
     const secs = ((Date.now() - t0) / 1000).toFixed(1);
