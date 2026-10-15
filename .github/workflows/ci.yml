@@ -26,7 +26,9 @@ jobs:
         include:
           - { target: linux-x64, os: ubuntu-24.04, test: true }
           - { target: linux-arm64, os: ubuntu-24.04-arm, test: true }
-          - { target: macos-arm64, os: macos-15, test: true }
+          # macOS runners draw GL (ANGLE) at about a second a frame: the full
+          # replay there runs on WebGPU (Metal), GL gets the short menus gate
+          - { target: macos-arm64, os: macos-15, test: true, test_args: '--gpu webgpu', gl_check: true }
           - { target: windows-x64, os: ubuntu-24.04, test: false } # tested on Windows below
           - { target: android-arm64, os: ubuntu-24.04, test: false } # launched on an emulator below
           - { target: wasc, os: ubuntu-24.04, test: false }
@@ -58,7 +60,10 @@ jobs:
         run: ./build.sh
       - name: Test
         if: matrix.test
-        run: ./test.sh
+        run: ./test.sh ${{ matrix.test_args }}
+      - name: Test (GL, the menus gate)
+        if: matrix.gl_check
+        run: node tests/run.mjs menus --gpu gl
       - name: Screenshot
         if: matrix.test
         run: ./shot.sh
