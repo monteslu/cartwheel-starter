@@ -97,10 +97,10 @@ Keep an autopilot that exercises your gameplay.
 ## Engine reference
 
 The engine headers are the API reference, for the version pinned in
-`scripts/deps.lock` (v0.7.0):
-<https://github.com/monteslu/cartwheel-engine/tree/v0.7.0/include/cartwheel>,
-guides in <https://github.com/monteslu/cartwheel-engine/tree/v0.7.0/docs/guides>
+`scripts/deps.lock` (v0.12.2):
+<https://github.com/monteslu/cartwheel-engine/tree/v0.12.2/include/cartwheel>,
+guides in <https://github.com/monteslu/cartwheel-engine/tree/v0.12.2/docs/guides>
 (`game-shell.md`, `input.md`, `physics.md`, `rendering-3d.md`), and shipping
-in <https://github.com/monteslu/cartwheel-engine/blob/v0.7.0/docs/shipping.md>.
+in <https://github.com/monteslu/cartwheel-engine/blob/v0.12.2/docs/shipping.md>.
 The same headers are in `deps/cartwheel-sdk/<platform>/include/cartwheel/`
 after the first build.
