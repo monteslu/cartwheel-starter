@@ -9,7 +9,7 @@ against the engine's prebuilt SDK: only the game compiles.
 Use it with GitHub's **Use this template** button, or clone it.
 
 ```sh
-./build.sh    # the game for this machine and the .wasc cart (fetches the SDK the first time)
+./build.sh    # the game for this machine and the .wasc cart in build/cart-wgpu (fetches the SDK the first time)
 ./run.sh      # play
 ./test.sh     # the tests, headless
 ./shot.sh     # a screenshot: out/shot.png
@@ -17,7 +17,9 @@ Use it with GitHub's **Use this template** button, or clone it.
 ```
 
 You need git, cmake, ninja, curl, Node.js and a C compiler, on Linux (x64 or
-arm64) or an Apple silicon Mac. Carts build on Linux x64.
+arm64) or an Apple silicon Mac. Carts build on Linux x64. There is one cart:
+the same `.wasc` draws with WebGPU on hosts that have it and with GL on the
+rest.
 
 The title screen, players joining (one to four, split screen), pause menu,
 settings (graphics: a preset, Auto, or render resolution, ambient
@@ -38,7 +40,7 @@ tests and attaches to the GitHub release:
 | `gemdash-<v>-windows-x64.zip` | Windows 10 or later |
 | `gemdash-<v>-macos-arm64.zip` | macOS 11 or later, Apple silicon: signed ad hoc, not notarized (right-click, Open the first time) |
 | `gemdash-<v>-android-arm64-debug.apk` | Android 7 or later: signed with a debug key, for sideloading |
-| `gemdash-<v>.wasc` | any wasmcart host: browser, Node, native players, RetroArch |
+| `gemdash-<v>.wasc` | any wasmcart host: browser, Node, native players, RetroArch (WebGPU or GL, whichever the host has) |
 
 Each native build renders with WebGPU (Dawn) and falls back to OpenGL ES 3.0.
 Signing for stores: the engine's

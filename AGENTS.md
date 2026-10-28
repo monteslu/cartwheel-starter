@@ -24,7 +24,7 @@ settings and split screen are done for you by the engine's shell
 
 | Command | Does |
 |---|---|
-| `./build.sh` | builds the game for this machine (`build/native/gemdash`) and the cart (`build/cart/carts/gemdash.wasc`); fetches the SDK the first time |
+| `./build.sh` | builds the game for this machine (`build/native/gemdash`) and the cart (`build/cart-wgpu/carts/gemdash.wasc`, one `.wasc` that draws with GL or WebGPU, whichever the host has); fetches the SDK the first time |
 | `./run.sh` | runs the game in a window |
 | `./test.sh` | runs the tests headless: the replay gate on GL and WebGPU, the menu gate, the screenshot test |
 | `./shot.sh [frames]` | writes `out/shot.png` after that many frames (default 300) of the autopilot playing |
@@ -97,10 +97,10 @@ Keep an autopilot that exercises your gameplay.
 ## Engine reference
 
 The engine headers are the API reference, for the version pinned in
-`scripts/deps.lock` (v0.12.2):
-<https://github.com/monteslu/cartwheel-engine/tree/v0.12.2/include/cartwheel>,
-guides in <https://github.com/monteslu/cartwheel-engine/tree/v0.12.2/docs/guides>
+`scripts/deps.lock` (v0.19.0):
+<https://github.com/monteslu/cartwheel-engine/tree/v0.19.0/include/cartwheel>,
+guides in <https://github.com/monteslu/cartwheel-engine/tree/v0.19.0/docs/guides>
 (`game-shell.md`, `input.md`, `physics.md`, `rendering-3d.md`), and shipping
-in <https://github.com/monteslu/cartwheel-engine/blob/v0.12.2/docs/shipping.md>.
+in <https://github.com/monteslu/cartwheel-engine/blob/v0.19.0/docs/shipping.md>.
 The same headers are in `deps/cartwheel-sdk/<platform>/include/cartwheel/`
 after the first build.

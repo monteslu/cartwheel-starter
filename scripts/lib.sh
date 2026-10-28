@@ -61,7 +61,7 @@ sdk() {
   if [ -n "${CARTWHEEL_SDK:-}" ]; then echo "$CARTWHEEL_SDK/$t"; return; fi
   fetch_sdk "$t" >&2
   case "$t" in
-    cart|cart-wgpu) "$SDKS/$t/scripts/fetch-deps.sh" --only wasi-sdk,binaryen >/dev/null ;; # the exact wasi-sdk its bitcode needs
+    cart-wgpu) "$SDKS/$t/scripts/fetch-deps.sh" --only wasi-sdk,binaryen >/dev/null ;; # the exact wasi-sdk its bitcode needs
   esac
   echo "$SDKS/$t"
 }

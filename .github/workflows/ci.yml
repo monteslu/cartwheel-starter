@@ -31,12 +31,12 @@ jobs:
           - { target: macos-arm64, os: macos-15, test: true, test_args: '--gpu webgpu', gl_check: true }
           - { target: windows-x64, os: ubuntu-24.04, test: false } # tested on Windows below
           - { target: android-arm64, os: ubuntu-24.04, test: false } # launched on an emulator below
-          - { target: wasc, os: ubuntu-24.04, test: false }
+          - { target: wasc, os: ubuntu-24.04, test: false } # the one cart: GL and WebGPU in one .wasc
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
       - name: Tools (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -104,12 +104,12 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
-      - uses: actions/download-artifact@v7
+          node-version: 24
+      - uses: actions/download-artifact@v8
         with:
           name: test-bundle-windows-x64
           path: .
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: release-windows-x64
           path: packages
@@ -146,7 +146,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: release-android-arm64
           path: apk
@@ -173,7 +173,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           pattern: release-*
           path: release

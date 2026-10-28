@@ -11,11 +11,11 @@ ver="${2:-$(grep -E '^version *=' "$ROOT/project.cwproj" | sed 's/.*= *//')}"
 host=$(host_target)
 native=$(sdk "$host")
 mkdir -p "$ROOT/out/release"
-if [ "$t" = wasc ]; then # the release cart: ThinLTO and wasm-opt
+if [ "$t" = wasc ]; then # the release cart (GL and WebGPU in one .wasc): ThinLTO and wasm-opt
   cart=$(sdk cart-wgpu)
-  configure cart-release "$cart" -DCMAKE_TOOLCHAIN_FILE="$cart/cmake/cart.cmake" -DCW_CWPACK="$native/bin/cwpack"
-  ninja -C "$ROOT/build/cart-release" gemdash
-  cp "$ROOT/build/cart-release/carts/gemdash.wasc" "$ROOT/out/release/gemdash-$ver.wasc"
+  configure cart-wgpu-release "$cart" -DCMAKE_TOOLCHAIN_FILE="$cart/cmake/cart.cmake" -DCW_CWPACK="$native/bin/cwpack"
+  ninja -C "$ROOT/build/cart-wgpu-release" gemdash
+  cp "$ROOT/build/cart-wgpu-release/carts/gemdash.wasc" "$ROOT/out/release/gemdash-$ver.wasc"
   ls -l "$ROOT/out/release"
   exit 0
 fi
