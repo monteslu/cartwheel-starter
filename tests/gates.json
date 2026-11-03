@@ -20,7 +20,7 @@
   },
   {
     "name": "menus",
-    "note": "the shell's screens from pad 0 (tests/menus.input: frame, pad buttons, axes): A on Play opens the join screen, A joins pad 1, Start begins a one-player match, Start pauses it",
+    "note": "the shell's screens from pad 0 (tests/menus.input: frame, pad buttons, axes): south on Play opens the join screen, south joins pad 1, Start begins a one-player match, Start pauses it",
     "app": "gemdash",
     "frames": 120,
     "input": "tests/menus.input",

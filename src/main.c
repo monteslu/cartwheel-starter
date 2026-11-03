@@ -18,8 +18,10 @@
  *   - start(): the shell's Play: reset the world for n players.
  *   - fixed_update(): one simulation tick (60 per second). Gameplay only runs
  *     when cw_shell_update() says so (not under a menu).
- *   - render(): the HUD (scores per player) over the 3D frame, then the
- *     shell's menus.
+ *   - render(): the HUD (scores and the controls per player) over the 3D
+ *     frame, then the shell's menus. Controls are shown as button prompts
+ *     (cartwheel/prompt.h): name the action, "{jump} jump", and the engine
+ *     draws the button for the device each player holds.
  *
  * Determinism: the simulation runs only in fixed_update, from the input
  * snapshot and cw_rng; never the wall clock. The same inputs give the same
@@ -40,6 +42,7 @@
 #include "cartwheel/input.h"
 #include "cartwheel/physics_nodes.h"
 #include "cartwheel/project.h"
+#include "cartwheel/prompt.h"
 #include "cartwheel/render2d.h"
 #include "cartwheel/scene_file.h"
 #include "cartwheel/shell.h"
@@ -265,6 +268,10 @@ static void render(void *user, double alpha) {
       snprintf(s, sizeof s, "P%d  %d gems", i + 1, G.gems[i]);
       cw_r2d_text(font, s, cw_v2(r.x + size * 0.6f, r.y + size * 0.4f),
                   &(cw_text_style){ .size = size, .outline_width = size * 0.08f });
+      /* the controls, as button prompts (cartwheel/prompt.h): the glyph of the button on this player's pad, the key
+       * on a keyboard, never a button's name ("A: jump" is a different button on another maker's pad) */
+      cw_prompt_text(font, "{move_left|move_right|move_forward|move_back} run    {jump} jump", i,
+                     cw_v2(r.x + r.w * 0.5f, r.y + r.h - size * 1.8f), size * 0.8f, (cw_color){ 0 }, CW_ALIGN_CENTER);
     }
     cw_rect shared = cw_shell_shared_rect(); /* three players: the free quadrant */
     if (shared.w > 0) {
