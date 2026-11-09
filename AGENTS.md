@@ -101,7 +101,9 @@ You cannot play it, so look at it, often:
 - **No strobe.** Nothing flashes more than three times a second, and no large
   area flips light to dark in a frame: lights, pickups and transitions swell
   and fade over a tenth of a second or more (WCAG 2.3.1 and the Harding
-  thresholds). Not checked by `./test.sh` yet: see "Pending" below.
+  thresholds). Feed every such effect through a flash meter
+  (`src/flash_meter.c`: the value it draws in, the value to draw out) and list
+  it in `tests/game.json` `flash.effects`. Checked by `tests/flash.mjs`.
 - **No screen shake.** The camera never shakes. A hit or a blast is felt in
   the pads (`cw_input_rumble`).
 - **Readable text.** Body text at least 2.4% of the screen height (26 px at
@@ -150,15 +152,13 @@ could not tell good from bad.
 | grounding | `tests/grounding.mjs` | one standing thing lifted 0.5 m |
 | gates | the engine's `tests/gate.mjs --hosts romdev` over `tests/gates.json`: the autopilot finishes the trail and the menus reach play, the same state on GL and WebGPU, a real picture, the text floor, no missing program state | each run one frame short |
 | text | the engine's `tools/check-text.mjs` over `tests/text.json`'s screens (title, join, play, finished, pause, settings, graphics) | the same screens at half text size |
+| flash | `tests/flash.mjs`: each effect's flash meter (`fl.<effect>_flashes`) at most 3 a second over a run that shows it | `flash_strobe`: every effect on and off every 4 ticks |
 | budget | every check's romdev client (`tests/lib/romdev.mjs`) stops a check that sends more than 40 requests plus 10 a second of game time | a loop stepping one frame a request |
 
-Pending, not in `./test.sh` yet, because romdev cannot do them for a cart:
+Pending, not in `./test.sh` yet, because romdev cannot do it for a cart (and
+the picture-based flash check, `tools/flash-check.mjs`, which needs every frame
+of a run; the flash meters stand in for it):
 
-- **flash** (WCAG 2.3.1 and Harding, with its 8 Hz control): the engine's
-  `tools/flash-check.mjs` needs every frame of a run, and romdev has no ranged
-  frame capture yet. Until then, keep the rule by construction: lights and
-  transitions swell and fade (the beacon's flame, the respawn dip in
-  `src/main.c`), never on or off in a frame.
 - **quality range** (each preset cheaper than the one above, with the
   every-preset-is-High control): the engine's `tools/quality-range.mjs`
   times the GPU, and a cart on romdev has no GPU timer yet. Until then, look
@@ -180,6 +180,8 @@ What a new game fills in, in `tests/game.json`:
 - `newcomer.players`: more than 1 adds the idle-second-seat run.
 - `grounding.frames`: frames of the autopilot cart when nothing should be in
   the air.
+- `flash.effects`: the game's flash meters; `flash.run`: frames and debug
+  requests of an autopilot run that shows every one of them.
 
 Publish those fields from the game with `cw_debug_*` in `init`, from the same
 values the HUD draws, so the checks read what the player sees.
@@ -253,6 +255,7 @@ material appears).
 |---|---|
 | `src/main.c` | the game |
 | `src/grounding.c` | the `grounding` debug command (game-agnostic: keep it) |
+| `src/flash_meter.c` | flash meters for the game's effects and the `flash_strobe` control (game-agnostic: keep it) |
 | `main.cwscene`, `scenes/` | the world and its pieces, as scene files |
 | `tools/make-art.mjs`, `tools/lib/` | the art generator, its texture toolkit and glTF writer |
 | `models/`, `textures/` | the generated art (committed; rerun the generator to change it) |

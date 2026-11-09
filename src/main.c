@@ -63,7 +63,13 @@
 #define MAX_PLAYERS 2
 #define LANTERNS 3
 
+#include "flash_meter.h"
+
 void grounding_register(void); /* src/grounding.c */
+
+/* The flash meters (src/flash_meter.c): every effect that changes the light on screen feeds the value it draws, and
+ * tests/flash.mjs holds each to at most 3 flashes a second. Effects swell and fade over 6 to 30 ticks; none flashes. */
+static flash_meter fl_lantern, fl_beacon, fl_respawn;
 
 typedef struct save_data {
   int32_t best_ticks; /* the fastest trail, in ticks (0: never finished) */
@@ -75,13 +81,16 @@ static struct {
   float arrow[MAX_PLAYERS * 2];   /* the HUD arrow per player: screen direction to the next goal */
   int32_t jump_cue[MAX_PLAYERS];  /* 1 while the {jump} prompt shows in that player's view */
   int32_t in_hint[MAX_PLAYERS];   /* jump-hint areas the player is inside */
-  int32_t fade[MAX_PLAYERS];      /* ticks left of the respawn fade */
+  int32_t fade[MAX_PLAYERS];      /* ticks left of the respawn fade (FADE_TICKS: in over 6, hold 6, out over 24) */
+  int32_t burst;                  /* ticks left of a found lantern's burst of light (BURST_TICKS), then it goes */
+  cw_node burst_node;
   int32_t air[MAX_PLAYERS];       /* ticks since the player left the ground (coyote time) */
   int32_t buffered[MAX_PLAYERS];  /* ticks left of a jump pressed just before landing (jump buffer) */
   float phase[MAX_PLAYERS], facing[MAX_PLAYERS];
   t3_vec3 target[LANTERNS + 1];   /* the lanterns in order, then the beacon */
   t3_vec3 checkpoint;
   float beacon;                   /* 0..1: the beacon's flame swelling once every lantern is found */
+  float fade_drawn;               /* the respawn dip as drawn (through its flash meter) */
   int32_t best;
 } G;
 
@@ -132,13 +141,29 @@ static void shell_screen(cw_shell_screen from, cw_shell_screen to, void *user) {
 
 /* ── signals from the level's areas ─────────────────────────────────── */
 
+#define BURST_TICKS 18
+#define FADE_TICKS 36
+
+/* a found lantern swells to three times its glow over 6 ticks, then fades out over 12 and goes */
+static float burst_value(void) {
+  int t = BURST_TICKS - G.burst; /* 0 .. BURST_TICKS */
+  return G.burst <= 0 ? 0 : t < 6 ? (1 + 2 * t / 6.0f) / 3 : (BURST_TICKS - t) / 12.0f;
+}
+/* the dip to dark after a fall: in over 6 ticks, held 6, out over 24 */
+static float fade_value(int i) {
+  int t = FADE_TICKS - G.fade[i];
+  return G.fade[i] <= 0 ? 0 : t < 6 ? 0.7f * t / 6.0f : t < 12 ? 0.7f : 0.7f * (FADE_TICKS - t) / 24.0f;
+}
+
 static void lantern_found(cw_node lantern, const cw_value *args, int argc, void *user) {
   int idx = (int)(intptr_t)user, p = argc > 0 ? player_of(args[0].node) : -1;
   if (p < 0 || idx != G.lanterns) return; /* in order: the arrow only ever shows the next one */
   G.lanterns++;
   G.goal = G.lanterns;
   G.checkpoint = (t3_vec3){ G.target[idx].x, G.target[idx].y + 0.2f, G.target[idx].z + 1.3f };
-  cw_node_free(lantern); /* deferred: physics signals arrive as a batch */
+  if (G.burst_node.id) cw_node_free(G.burst_node);
+  G.burst_node = lantern; /* it bursts, then goes (fixed_update) */
+  G.burst = BURST_TICKS;
   play(G.lanterns == LANTERNS ? snd_beacon : snd_lantern);
   cw_input_rumble(p, 0.25f, 0.45f, 140); /* felt in the pad: no camera shake, ever */
 }
@@ -285,6 +310,12 @@ static void init(void *user) {
   cw_debug_field("cue.jump", G.jump_cue, CW_DBG_I32, MAX_PLAYERS);
   cw_debug_i32("cue.goal", &G.goal);
   grounding_register();
+  flash_meter_init(&fl_lantern, "lantern");
+  flash_meter_init(&fl_beacon, "beacon");
+  flash_meter_init(&fl_respawn, "respawn");
+  flash_meter_register(&fl_lantern);
+  flash_meter_register(&fl_beacon);
+  flash_meter_register(&fl_respawn);
 #ifdef GAME_AUTOPILOT
   cw_shell_start(1); /* straight into play, no menus */
 #endif
@@ -340,7 +371,7 @@ static void move_player(int i, float dt) {
     cw_node3d_set_position(p, pos);
     cw_node_set(p, "velocity", cw_val_vec3(0, 0, 0));
     G.respawns++;
-    G.fade[i] = 30;
+    G.fade[i] = FADE_TICKS;
     play(snd_fall);
   }
   if (G.fade[i]) G.fade[i]--;
@@ -367,7 +398,7 @@ static void move_player(int i, float dt) {
   /* the camera follows from behind and above (eased, so it never jerks) */
   cw_node cam = camera_node(i);
   t3_vec3 c = cw_node3d_position(cam), want = { pos.x, pos.y + 4.2f, pos.z + 7 };
-  float e = G.ticks == 0 || G.fade[i] == 29 ? 1 : 0.12f;
+  float e = G.ticks == 0 || G.fade[i] == FADE_TICKS - 6 ? 1 : 0.12f; /* snaps while the view is dark */
   cw_node3d_set_position(cam, (t3_vec3){ c.x + (want.x - c.x) * e, c.y + (want.y - c.y) * e, c.z + (want.z - c.z) * e });
 
   /* the cues this player's view shows: the arrow to the next goal, the jump prompt */
@@ -397,10 +428,20 @@ static void fixed_update(void *user, double dt) {
   }
   if (!G.done)
     for (int i = 0; i < G.players; i++) move_player(i, (float)dt);
+  /* the found lantern's burst: its light drawn through the flash meter */
+  float b = flash_meter_feed(&fl_lantern, burst_value());
+  if (G.burst_node.id) {
+    cw_node_set(cw_node_get(G.burst_node, "Glow"), "energy", cw_val_float(18 * b));
+    cw_node_set(cw_node_get(G.burst_node, "Glass"), "emissive", cw_val_color(3.2f * 3 * b, 1.7f * 3 * b, 0.55f * 3 * b, 1));
+    if (--G.burst <= 0) { cw_node_free(G.burst_node); G.burst_node = (cw_node){ 0 }; }
+  }
+  float dark = 0;
+  for (int i = 0; i < G.players; i++) dark = fmaxf(dark, fade_value(i));
+  G.fade_drawn = flash_meter_feed(&fl_respawn, dark);
   /* the beacon's flame swells over a second once every lantern is found (a swell, never a flash) */
-  if (G.lanterns == LANTERNS && G.beacon < 1) {
-    G.beacon = fminf(1, G.beacon + (float)dt);
-    float k = G.beacon * G.beacon * (3 - 2 * G.beacon);
+  if (G.lanterns == LANTERNS && G.beacon < 1) G.beacon = fminf(1, G.beacon + (float)dt);
+  float k = flash_meter_feed(&fl_beacon, G.beacon * G.beacon * (3 - 2 * G.beacon));
+  if (k > 0 || fl_beacon.strobe) {
     cw_node beacon = cw_node_get(level(), "Beacon");
     cw_node_set(cw_node_get(beacon, "Flame"), "emissive", cw_val_color(6.0f * k, 2.0f * k, 0.35f * k, 1));
     cw_node_set(cw_node_get(beacon, "Light"), "energy", cw_val_float(40 * k));
@@ -446,8 +487,8 @@ static void hud(int i, cw_font font, float size) {
     text_centered(font, s, panel.x + panel.w * 0.5f, panel.y + size * 2.8f, (cw_text_style){ .size = size });
     cw_prompt_text(font, "{ui_accept} play again", i, cw_v2(panel.x + panel.w * 0.5f, panel.y + size * 4.4f), size, (cw_color){ 0 }, CW_ALIGN_CENTER);
   }
-  if (G.fade[i]) /* a short dip to dark after a fall, eased out */
-    cw_r2d_rect(r, cw_rgba(0, 0, 0, 0.7f * G.fade[i] / 30.0f));
+  if (G.fade[i] || fl_respawn.strobe) /* the dip to dark after a fall, as its flash meter passed it */
+    cw_r2d_rect(r, cw_rgba(0, 0, 0, G.fade_drawn));
 }
 
 static void render(void *user, double alpha) {

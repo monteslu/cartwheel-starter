@@ -3,15 +3,48 @@
   "newcomer": {
     "note": "Level 1's goal and the debug fields that hold the on-screen cues (src/main.c publishes them).",
     "players": 2,
-    "goal": { "field": "game.done", "equals": 1 },
+    "goal": {
+      "field": "game.done",
+      "equals": 1
+    },
     "maxSeconds": 60,
-    "move": { "field": "cue.arrow", "note": "per player: x right, y up on screen, the way the HUD arrow points" },
-    "press": [{ "field": "cue.jump", "button": "south", "note": "per player: 1 while the {jump} prompt shows" }],
-    "progress": ["game.lanterns", "game.respawns"]
+    "move": {
+      "field": "cue.arrow",
+      "note": "per player: x right, y up on screen, the way the HUD arrow points"
+    },
+    "press": [
+      {
+        "field": "cue.jump",
+        "button": "south",
+        "note": "per player: 1 while the {jump} prompt shows"
+      }
+    ],
+    "progress": [
+      "game.lanterns",
+      "game.respawns"
+    ]
   },
   "grounding": {
     "note": "Frames of the autopilot cart (src/main.c GAME_AUTOPILOT) when nothing should be in the air: crates settled, no player mid-jump.",
-    "frames": [30, 400],
+    "frames": [
+      30,
+      400
+    ],
     "tolerance": 0.03
+  },
+  "flash": {
+    "note": "The effects with a flash meter (src/main.c fl_*), and a run of the autopilot cart that shows each: lanterns found, a fall (the player dropped into the chasm by a debug request) and its respawn dip, the beacon lit.",
+    "effects": [
+      "lantern",
+      "beacon",
+      "respawn"
+    ],
+    "run": [
+      {
+        "frame": 300,
+        "command": "set Level/Player1 position \"vec3(9, 3, -20)\""
+      }
+    ],
+    "frames": 1000
   }
 }

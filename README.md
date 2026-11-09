@@ -6,7 +6,8 @@ It builds a small finished game, **Lantern Trail**, for Linux, Windows, macOS,
 Android and as a [wasmcart](https://github.com/wasmcart/wasmcart) cart, against
 the engine's prebuilt SDK (only the game compiles), and it comes with the checks
 that hold a game to a good standard: a newcomer can finish it, nothing floats,
-the text is readable, the prompts fit every device, and GL and WebGPU agree.
+nothing strobes, the text is readable, the prompts fit every device, and GL
+and WebGPU agree.
 
 Use it with GitHub's **Use this template** button, or clone it. Coding agents:
 read [AGENTS.md](AGENTS.md) next; it is the playbook.
@@ -66,14 +67,14 @@ on-screen cues).
 | prompts | no text names a button ("A: jump"); prompts name actions | a line that names a button |
 | newcomer | a bot that knows only the on-screen cues, reacts late and aims badly finishes level 1, alone and with an idle second seat | the same bot ignoring the cues |
 | grounding | nothing in the level floats | one thing lifted half a metre |
+| flash | every effect's flash meter reads at most 3 flashes a second (WCAG 2.3.1, Harding) | every effect strobing |
 | gates | the trail and the menus reach the same state on GL and WebGPU, with a real picture and no missing program state | each run one frame short |
 | text | text at least the engine's size floor on every screen | the same screens at half text size |
 | budget | no check floods the shared romdev server | a check that loops one frame a request |
 
-Pending until romdev can capture every frame of a run and time a cart's GPU:
-the flash check (WCAG 2.3.1 and Harding, with its 8 Hz strobe control) and the
-quality range (each preset cheaper than the one above, with the every-preset-is-High
-control). AGENTS.md says how to keep both rules meanwhile.
+Pending until romdev can time a cart's GPU: the quality range (each preset
+cheaper than the one above, with the every-preset-is-High control). AGENTS.md
+says how to keep the rule meanwhile.
 
 ## Releases
 

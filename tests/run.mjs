@@ -1,7 +1,7 @@
 // ./test.sh: every check, in order, each with its control. Prints one line per result; exit 1 when any failed.
 //
 //   node tests/run.mjs [check ...] [--gpu gl|webgpu]
-// Checks: prompts (no GPU); budget, grounding, newcomer, gates, text (the cart through romdev, on GL and WebGPU).
+// Checks: prompts (no GPU); budget, grounding, flash, newcomer, gates, text (the cart through romdev, on GL and WebGPU).
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -29,6 +29,7 @@ const CHECKS = {
   },
   budget: () => node(['tests/budget.mjs']),
   grounding: () => node(['tests/grounding.mjs', ...gpuArgs]),
+  flash: () => node(['tests/flash.mjs', ...gpuArgs]),
   newcomer: () => node(['tests/newcomer.mjs', ...gpuArgs]),
   // the engine's gate runner, romdev alone: GL the reference, the WebGPU leg against it, a control per leg
   gates: () => node([join(sdkTools(ROOT), '..', 'tests', 'gate.mjs'), '--hosts', 'romdev', '--gpu', gpus.length > 1 ? 'both' : gpus[0]]),
