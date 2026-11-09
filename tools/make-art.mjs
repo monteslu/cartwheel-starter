@@ -48,16 +48,16 @@ const flag = (u, v, o) => {
   const edge = f2 - f1; // 0 on a joint
   const g = fbm(u, v, 8, 5, 3), fine = fbm(u, v, 48, 3, 4);
   const worn = smooth(0.02, 0.2, edge + (fbm(u, v, 24, 3, 5) - 0.5) * 0.08); // rounded, uneven edges
-  const joint = 1 - smooth(0.018, 0.045, edge);
+  const joint = 1 - smooth(0.01, 0.028, edge);
   const warm = hash2(id * 777, 3, 4), base = [0.66 + 0.14 * (id - 0.5) + 0.04 * warm, 0.6 + 0.1 * (id - 0.5), 0.5 + 0.08 * (hash2(id * 999, 1, 2) - 0.5) - 0.05 * warm];
   tint(o, base, 0.78 + 0.35 * g + 0.12 * (fine - 0.5) + 0.1 * (hash2(Math.floor(u * 512), Math.floor(v * 512), 6) - 0.5));
   mix(o, [0.3, 0.27, 0.22], (1 - worn) * 0.45); // grime on the worn rims
   const moss = joint * smooth(0.45, 0.65, fbm(u, v, 6, 4, 9));
-  mix(o, [0.11, 0.09, 0.07], joint * (1 - moss));
+  mix(o, [0.26, 0.22, 0.17], joint * (1 - moss)); // sandy grout, not black: thin lines at the player's distance
   mix(o, [0.16, 0.24, 0.08], moss);
   o.h = worn * 0.8 + fine * 0.15 + g * 0.1 - joint * 0.3;
   o.ro = clamp(0.62 + (1 - worn) * 0.2 + joint * 0.15 + fine * 0.08, 0, 1); // tops smoothed by feet
-  o.ao = 1 - joint * 0.55;
+  o.ao = 1 - joint * 0.3;
 };
 /** cliff rock: strata that follow the level's height, cracks, lichen. A tile is 4 m wide, 4 m high. */
 const cliff = (u, v, o) => {
@@ -148,6 +148,26 @@ function bladeCard(size) {
   });
   return t;
 }
+/** a card of leaves: overlapping pointed ovals at random angles, alpha cut between them (light shows through the crown) */
+function leafCard(size) {
+  const t = new Tex(size);
+  t.alpha = new Float32Array(size * size);
+  const leaves = Array.from({ length: 34 }, (_, k) => ({ x: 0.12 + 0.76 * hash2(k, 1, 301), y: 0.12 + 0.76 * hash2(k, 2, 301), a: hash2(k, 3, 301) * Math.PI, s: 0.07 + 0.06 * hash2(k, 4, 301), c: hash2(k, 5, 301) }));
+  t.each((u, v, i) => {
+    let best = null, depth = 0;
+    for (const L of leaves) { // later leaves lie on top
+      const dx = u - L.x, dy = v - L.y, ca = Math.cos(L.a), sa = Math.sin(L.a);
+      const lu = (dx * ca + dy * sa) / L.s, lv = (-dx * sa + dy * ca) / (L.s * 0.45);
+      const w = 1 - Math.abs(lu); // pointed at both ends
+      if (Math.abs(lu) < 1 && Math.abs(lv) < w) { best = L; depth = w - Math.abs(lv); }
+    }
+    t.alpha[i] = best ? 1 : 0;
+    const c = best ? best.c : 0, vein = best ? smooth(0.08, 0, depth) : 0;
+    t.a[0][i] = 0.17 + 0.12 * c - 0.04 * vein; t.a[1][i] = 0.33 + 0.12 * c - 0.05 * vein; t.a[2][i] = 0.08 + 0.03 * c;
+    t.height[i] = depth; t.rough[i] = 0.65; t.ao[i] = 0.7 + 0.3 * c;
+  });
+  return t;
+}
 /** clouds across the dome: u around (tiles), v from the horizon (0) up; alpha is cover */
 function cloudTex(w, h) {
   const t = new Tex(w, h);
@@ -182,6 +202,7 @@ const sets = { flag: [flag, 3], cliff: [cliff, 4], grass: [grass, 2], cut: [cut,
 const baked = {};
 for (const [name, [fn, strength]] of Object.entries(sets)) { baked[name] = bake(name === 'bark' || name === 'planks' ? 256 : S, fn); writeSet(TEX, name, baked[name], strength); }
 writeSet(TEX, 'blades', bladeCard(128), 1);
+writeSet(TEX, 'leafcard', leafCard(256), 1.5);
 writeSet(TEX, 'clouds', cloudTex(1024, 256), 0);
 terrainLayer('grass', baked.grass, 2);
 terrainLayer('rock', baked.cliff, 4);
@@ -352,8 +373,22 @@ for (const [file, sets] of [['scatter.glb', base], ['scatter_detail.glb', detail
         crown.quad(a, d, cc, b, nn, (p) => [Math.atan2(p[2] - c[2], p[0] - c[0]) / 2, (p[1] - c[1]) / 2]);
       }
   };
-  blob([0, 3.1, 0], 1.35); blob([0.7, 2.7, 0.3], 0.95); blob([-0.6, 2.8, -0.4], 1.0); blob([0.1, 3.9, -0.2], 0.9); blob([-0.3, 2.6, 0.7], 0.8);
-  model('tree.glb', [[trunk, 'bark'], [crown, 'leaves']]);
+  // the crown: a small dark core (no sky through the middle) and leaf cards over it, the light coming through their gaps
+  const cards = new Mesh();
+  const clusters = [[[0, 3.0, 0], 1.05], [[0.6, 2.6, 0.25], 0.75], [[-0.55, 2.7, -0.35], 0.8], [[0.1, 3.7, -0.15], 0.7], [[-0.25, 2.5, 0.6], 0.65]];
+  clusters.forEach(([c, r], ci) => {
+    blob(c, r * 0.62);
+    for (let k = 0; k < 30; k++) {
+      const ph = hash2(ci, k, 311) * Math.PI * 2, ct = 2 * hash2(ci, k, 312) - 1, st = Math.sqrt(1 - ct * ct), rr = r * (0.75 + 0.35 * hash2(ci, k, 313));
+      const n = [st * Math.cos(ph), ct * 0.85, st * Math.sin(ph)], p = [c[0] + n[0] * rr, c[1] + n[1] * rr, c[2] + n[2] * rr];
+      const up = Math.abs(n[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0], t1 = norm(cross(up, n)), t2 = norm(cross(n, t1)), sz = 0.45 + 0.2 * hash2(ci, k, 314);
+      const spin = hash2(ci, k, 315) * Math.PI, a1 = t1.map((x, q) => (x * Math.cos(spin) + t2[q] * Math.sin(spin)) * sz), a2 = t1.map((x, q) => (-x * Math.sin(spin) + t2[q] * Math.cos(spin)) * sz);
+      const P = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([s1, s2]) => [p[0] + a1[0] * s1 + a2[0] * s2, p[1] + a1[1] * s1 + a2[1] * s2, p[2] + a1[2] * s1 + a2[2] * s2]);
+      const U = [[0, 1], [1, 1], [1, 0], [0, 0]], ids = P.map((q, m) => cards.vert(q, norm(n), U[m]));
+      cards.idx.push(ids[0], ids[1], ids[2], ids[0], ids[2], ids[3]);
+    }
+  });
+  model('tree.glb', [[trunk, 'bark'], [crown, 'leaves'], [cards, 'leafcard', { alphaMode: 'MASK', alphaCutoff: 0.5, doubleSided: true }]]);
 }
 /** a crate: 0.8 m planked box with a metal band, centred on the origin */
 {
@@ -398,14 +433,15 @@ function png16(w, hgt, v) {
   // the trail's footprint (x -7..7, z -48..6): the canyon floor near it, the walls beyond
   const distTrail = (x, z) => Math.hypot(Math.max(Math.abs(x) - 7, 0), Math.max(z - 6, -48 - z, 0));
   // mesas and towers: tall ones east and north (lit by the low western sun), a few far west (silhouettes against it)
-  const towers = [[46, -30, 11, 48], [62, -72, 15, 66], [24, -112, 16, 72], [-26, -118, 12, 56], [74, 2, 10, 40], [-130, -40, 16, 46], [-110, -95, 12, 38], [96, -40, 13, 58]];
+  // [x, z, radius, height]: far enough that the chase camera sees their tops (about 9 degrees above its horizon)
+  const towers = [[150, -90, 22, 30], [90, -200, 26, 38], [-60, -225, 22, 36], [200, 10, 18, 26], [-170, -60, 20, 26], [40, -170, 16, 28], [-150, -170, 18, 30], [70, -60, 9, 12], [-55, -80, 8, 10]];
   for (let j = 0; j < N; j++)
     for (let i = 0; i < N; i++) {
       const x = cx + (i - (N - 1) / 2) * spacing, z = cz + (j - (N - 1) / 2) * spacing, u = i / (N - 1), v = j / (N - 1);
       const d = distTrail(x, z);
       const ridge = 1 - Math.abs(fbm(u, v, 4, 5, 201) * 2 - 1); // ridged noise: crests
       const east = smooth(-20, 30, x); // the west stays open towards the sunset: low hills there, cliffs east and north
-      const walls = smooth(32, 110, d) * lerp(6 + 10 * ridge, 26 + 40 * ridge * ridge, east);
+      const walls = smooth(32, 120, d) * lerp(4 + 8 * ridge, 10 + 18 * ridge * ridge, east);
       let y = -8 + walls + (fbm(u, v, 24, 3, 202) - 0.5) * 1.6 * smooth(4, 12, d);
       for (const [tx, tz, r, th] of towers) { // rock towers: steep sided, flat topped mesas
         const k = smooth(r, r * 0.65, Math.hypot(x - tx, z - tz) * (0.9 + 0.2 * fbm(u, v, 16, 2, 203)));

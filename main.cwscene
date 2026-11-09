@@ -381,32 +381,12 @@ radius = 0.3
 height = 2.8
 
 [node name="Tree1" parent="." instance=3]
-position = vec3(-5.5, 0, 4.5)
+position = vec3(-6.1, 0, -5.1)
 rotation = vec3(0, 0, 0)
 
 [node name="Tree2" parent="." instance=3]
-position = vec3(5.5, 0, 4.5)
+position = vec3(6.1, 0, -5.3)
 rotation = vec3(0, 1.3, 0)
-
-[node name="Tree3" parent="." instance=3]
-position = vec3(5.8, 0, -4)
-rotation = vec3(0, 2.6, 0)
-
-[node name="Tree4" parent="." instance=3]
-position = vec3(-4.5, 1.8, -28.5)
-rotation = vec3(0, 3.9, 0)
-
-[node name="Tree5" parent="." instance=3]
-position = vec3(4.8, 1.8, -28.8)
-rotation = vec3(0, 5.2, 0)
-
-[node name="Tree6" parent="." instance=3]
-position = vec3(-5.2, 0, -3.6)
-rotation = vec3(0, 6.5, 0)
-
-[node name="Tree7" parent="." instance=3]
-position = vec3(4.2, 1.8, -22.4)
-rotation = vec3(0, 7.8, 0)
 
 [node name="Crate1" parent="." instance=4]
 position = vec3(-3.6, 0.4, 0.5)

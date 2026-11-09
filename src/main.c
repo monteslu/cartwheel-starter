@@ -46,6 +46,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "cartwheel/anim.h"
 #include "cartwheel/audio.h"
 #include "cartwheel/core.h"
 #include "cartwheel/debug.h"
@@ -86,7 +87,8 @@ static struct {
   cw_node burst_node;
   int32_t air[MAX_PLAYERS];       /* ticks since the player left the ground (coyote time) */
   int32_t buffered[MAX_PLAYERS];  /* ticks left of a jump pressed just before landing (jump buffer) */
-  float phase[MAX_PLAYERS], facing[MAX_PLAYERS];
+  float facing[MAX_PLAYERS];
+  int32_t clip[MAX_PLAYERS];      /* the clip each body plays (CLIP_*) */
   t3_vec3 target[LANTERNS + 1];   /* the lanterns in order, then the beacon */
   t3_vec3 checkpoint;
   float beacon;                   /* 0..1: the beacon's flame swelling once every lantern is found */
@@ -225,6 +227,45 @@ static void dress_models(void) {
   }
 }
 
+/* ── the players' bodies: skinned characters from tools/characters/make-characters.mjs, with their clips ── */
+
+static const char *const CLIP_NAMES[] = { "idle", "walk", "run", "jump" };
+enum { CLIP_IDLE, CLIP_WALK, CLIP_RUN, CLIP_JUMP };
+/* the ground speed each clip covers at speed 1 (two strides a cycle, measured from the clip's planted foot): the
+ * playback speed follows the body's, so the planted foot stays put */
+static const float CLIP_SPEED[] = { 0, 1.5f, 3.4f, 0 };
+
+static void dress_player(int i) {
+  cw_node rig = cw_node_get(player_node(i), "Rig"), model = cw_node_get(rig, "Model"), anim = cw_node_get(rig, "Anim");
+  cw_res res = cw_res_load(i == 0 ? "models/hiker.glb" : "models/hiker_blue.glb", CW_RES_GLTF);
+  const cw_gltf *g = cw_res_gltf(res);
+  t3_object *o = g ? cw_gltf_instantiate(res) : NULL;
+  if (!o) { cw_error("models/hiker.glb did not load: run node tools/characters/make-characters.mjs, and list it in roots.txt"); return; }
+  t3_object_traverse(o, shadows_on, NULL);
+  t3_object_add(cw_node3d_object(model), o);
+  t3_release(o);
+  for (int k = 0; k < g->gltf->animation_count; k++) { /* the clips, bound to the bones under Model */
+    cw_anim a = cw_anim_from_t3_clip(g->gltf->animations[k], "Model");
+    cw_anim_set_stored(a, false);
+    cw_anim_player_add(anim, g->gltf->animations[k]->name, a);
+    cw_anim_release(a);
+  }
+  cw_anim_player_play(anim, "idle", 0);
+  G.clip[i] = CLIP_IDLE;
+}
+
+/* the clip for what the body does now, and its playback speed */
+static void animate_player(int i, bool on_floor, float speed) {
+  cw_node anim = cw_node_get(cw_node_get(player_node(i), "Rig"), "Anim");
+  int want = !on_floor ? CLIP_JUMP : speed > 2.4f ? CLIP_RUN : speed > 0.3f ? CLIP_WALK : CLIP_IDLE;
+  if (want != G.clip[i]) {
+    cw_anim_player_play(anim, CLIP_NAMES[want], want == CLIP_JUMP ? 0.08f : 0.2f);
+    G.clip[i] = want;
+  }
+  float k = CLIP_SPEED[want] > 0 ? speed / CLIP_SPEED[want] : 1;
+  cw_node_set(anim, "speed_scale", cw_val_float(k));
+}
+
 /* ── the shell's Play: the world as authored, for n players ─────────── */
 
 static void start(int players, void *user) {
@@ -255,12 +296,7 @@ static void start(int players, void *user) {
     cw_connect(hints[i], "body_exited", hints[i], NULL, hint_exited, NULL, 0);
   }
   G.checkpoint = cw_node3d_position(player_node(0));
-  if (players > 1) { /* the second player in blue */
-    cw_node rig = cw_node_get(player_node(1), "Rig");
-    cw_node_set(cw_node_get(rig, "Torso"), "color", cw_val_color(0.08f, 0.25f, 0.6f, 1));
-    cw_node_set(cw_node_get(rig, "ShoulderL/Sleeve"), "color", cw_val_color(0.08f, 0.25f, 0.6f, 1));
-    cw_node_set(cw_node_get(rig, "ShoulderR/Sleeve"), "color", cw_val_color(0.08f, 0.25f, 0.6f, 1));
-  }
+  for (int i = 0; i < players; i++) dress_player(i);
   cw_node cams[MAX_PLAYERS];
   for (int i = 0; i < players; i++) cams[i] = camera_node(i);
   cw_shell_split(NULL, cams); /* one view per player */
@@ -376,7 +412,7 @@ static void move_player(int i, float dt) {
   }
   if (G.fade[i]) G.fade[i]--;
 
-  /* the body: face the way it moves, swing the limbs with its speed */
+  /* the body: face the way it moves; the clip follows what it does */
   float hs = sqrtf(vx * vx + vz * vz);
   if (hs > 0.3f) {
     float want = atan2f(-vx, -vz), d = want - G.facing[i];
@@ -384,16 +420,9 @@ static void move_player(int i, float dt) {
     while (d < -3.14159f) d += 6.28318f;
     G.facing[i] += d * 0.25f;
   }
-  G.phase[i] += hs * dt * 2.2f;
-  float swing = on_floor ? sinf(G.phase[i]) * fminf(hs / speed, 1) * 0.7f : 0.35f;
-  cw_node rig = cw_node_get(p, "Rig");
-  cw_node_set(rig, "rotation", cw_val_vec3(0, G.facing[i], 0));
-  /* both legs swing about the hips, which lifts the feet: lower the body so the planted foot stays on the ground */
-  cw_node_set(rig, "position", cw_val_vec3(0, on_floor ? -0.875f * (1 - cosf(swing)) : 0, 0));
-  cw_node_set(cw_node_get(rig, "HipL"), "rotation", cw_val_vec3(swing, 0, 0));
-  cw_node_set(cw_node_get(rig, "HipR"), "rotation", cw_val_vec3(-swing, 0, 0));
-  cw_node_set(cw_node_get(rig, "ShoulderL"), "rotation", cw_val_vec3(-swing * 0.8f, 0, 0));
-  cw_node_set(cw_node_get(rig, "ShoulderR"), "rotation", cw_val_vec3(swing * 0.8f, 0, 0));
+  cw_node_set(cw_node_get(p, "Rig"), "rotation", cw_val_vec3(0, G.facing[i], 0));
+  cw_node_get_prop(p, "on_floor", &v);
+  animate_player(i, v.b || G.air[i] < 6, hs);
 
   /* the camera follows from behind and above (eased, so it never jerks) */
   cw_node cam = camera_node(i);

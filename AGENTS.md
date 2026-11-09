@@ -202,9 +202,15 @@ Keep `./test.sh` green after every step.
    types; their properties are in the engine's `docs/nodes.json` and answer
    `props <node>` over the debug channel.
    Then `node tools/make-art.mjs` and `./build.sh` (section 6).
-4. **The player.** `scenes/player.cwscene` is the body (collision capsule and
-   a jointed rig); `move_player` in `src/main.c` moves it. Keep coyote time,
-   the jump buffer and the walk that keeps a foot planted.
+4. **The player.** `scenes/player.cwscene` is the body (a collision capsule,
+   a Model node and an AnimationPlayer); `dress_player` puts the skinned
+   character from `tools/characters/` on it and `animate_player` picks its
+   clip (idle, walk, run, jump) and plays it at the body's speed, so the planted
+   foot stays put. `move_player` moves it. Keep coyote time and the jump
+   buffer. For your own characters, add a spec to `SPECS` in
+   `tools/characters/make-characters.mjs` (proportions, face, hair, outfit,
+   colours) and the clips you need to `KEEP_CLIPS` (the library has many more:
+   attacks, hits, falls), then run it.
 5. **The goal and the cues.** Replace the lanterns and the beacon with your
    level's goal. Whatever your game asks of the player, show it on screen
    (an arrow, a marker, a prompt) and publish it as a debug field. Update
@@ -238,6 +244,11 @@ material appears).
   `[node name="Trail" type="Node3D" groups="models/trail.glb"]`. `dress_models`
   in `src/main.c` lists the models; every file the game loads by name must also
   be listed in `roots.txt` (the packer follows scene files, not strings).
+- **Characters** come from `tools/characters/` (adapted from an example
+  game's character tool): `node tools/characters/make-textures.mjs && node
+  tools/characters/make-characters.mjs` writes `models/<name>.glb`, a skinned
+  figure with a rounded head and painted face, hands, shoes, cloth with folds,
+  matte cloth and skin shading, and its clips.
 - **Textures** are functions of (u, v) filling albedo, height, roughness and
   occlusion (`flag`, `cliff`, `grass`, ...); `writeSet` turns the height into a
   normal map and writes `_c`, `_n` and `_orm` PNGs, embedded into the models.
@@ -258,6 +269,7 @@ material appears).
 | `src/flash_meter.c` | flash meters for the game's effects and the `flash_strobe` control (game-agnostic: keep it) |
 | `main.cwscene`, `scenes/` | the world and its pieces, as scene files |
 | `tools/make-art.mjs`, `tools/lib/` | the art generator, its texture toolkit and glTF writer |
+| `tools/characters/` | the character generator: skinned bodies, faces, clothes, clips |
 | `models/`, `textures/` | the generated art (committed; rerun the generator to change it) |
 | `project.cwproj` | name, app, input map (`input.*`), physics layers, render size, export presets |
 | `roots.txt` | what gets packed (scenes reach the rest) |

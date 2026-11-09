@@ -14,3 +14,5 @@ textures/terrain_height.png
 textures/terrain_rock_albedo.png
 textures/terrain_rock_normal.png
 textures/terrain_splat.png
+models/hiker.glb
+models/hiker_blue.glb
