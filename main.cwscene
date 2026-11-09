@@ -208,7 +208,7 @@ size = vec3(3, 2, 1.6)
 
 [node name="ScatterDetail" parent="." type="Node3D" groups="models/scatter_detail.glb"]
 
-[node name="Clouds" parent="." type="Node3D" groups="models/clouds.glb, airborne"]
+[node name="Clouds" parent="." type="Node3D" groups="models/clouds.glb,airborne"]
 
 [node name="Land" parent="." type="Terrain3D"]
 position = vec3(0, -12, -21)

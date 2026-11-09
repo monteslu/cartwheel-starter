@@ -269,15 +269,18 @@ for (const n of dressed('dress_column')) {
 
 // ── scatter on the tops: grass tufts and pebbles, each standing on its surface. A third of them go in
 // scatter.glb (always drawn), the rest in scatter_detail.glb (the game's Scenery setting: Medium and up) ──
-const base = { tufts: new Mesh(), pebbles: new Mesh() }, detail = { tufts: new Mesh(), pebbles: new Mesh() };
+// a node per top in each file, so the grounding check judges each top's scatter on its own
+const base = [], detail = [];
 for (const { c, kind } of tops) {
+  const b = { tufts: new Mesh(), pebbles: new Mesh() }, d = { tufts: new Mesh(), pebbles: new Mesh() };
+  base.push(b); detail.push(d);
   const [x0, x1] = [Math.min(c[4][0], c[6][0]), Math.max(c[4][0], c[6][0])], [z0, z1] = [Math.min(c[4][2], c[6][2]), Math.max(c[4][2], c[6][2])], y = c[4][1];
   const area = (x1 - x0) * (z1 - z0);
   const nT = kind === 'grass' ? Math.round(area * 2.4) : Math.round(area * 0.08), nP = Math.round(area * (kind === 'grass' ? 0.15 : 0.08));
   for (let i = 0; i < nT; i++) {
     const px = lerp(x0 + 0.2, x1 - 0.2, rnd()), pz = lerp(z0 + 0.2, z1 - 0.2, rnd());
     if (kind === 'grass' && Math.abs(px) < 1.2 && rnd() < 0.7) continue; // a trodden path down the middle
-    const s = 0.22 + rnd() * 0.25, w = s * 0.9, a0 = rnd() * Math.PI, tufts = (i % 3 ? detail : base).tufts;
+    const s = 0.22 + rnd() * 0.25, w = s * 0.9, a0 = rnd() * Math.PI, tufts = (i % 3 ? d : b).tufts;
     for (let k = 0; k < 3; k++) {
       const a = a0 + (k * Math.PI) / 3, dx = Math.cos(a) * w, dz = Math.sin(a) * w;
       const nn = [Math.sin(a), 0.3, -Math.cos(a)];
@@ -289,7 +292,7 @@ for (const { c, kind } of tops) {
   for (let i = 0; i < nP; i++) { // a pebble: a squashed, jittered octahedron resting on the top
     const px = lerp(x0 + 0.3, x1 - 0.3, rnd()), pz = lerp(z0 + 0.3, z1 - 0.3, rnd()), r = 0.06 + rnd() * 0.12, hgt = r * (0.5 + rnd() * 0.3);
     const v = [[r, 0, 0], [0, 0, r], [-r, 0, 0], [0, 0, -r]].map(([a, , b]) => [px + a * (0.8 + rnd() * 0.4), y + hgt * 0.35, pz + b * (0.8 + rnd() * 0.4)]);
-    const top = [px, y + hgt, pz], bot = [px, y, pz], pebbles = (i % 3 ? detail : base).pebbles;
+    const top = [px, y + hgt, pz], bot = [px, y, pz], pebbles = (i % 3 ? d : b).pebbles;
     for (let k = 0; k < 4; k++) {
       const a = v[k], b = v[(k + 1) % 4];
       for (const [p, q, r2] of [[top, b, a], [bot, a, b]]) {
@@ -321,8 +324,16 @@ function model(file, parts) {
   g.write(join(MOD, 'trail.glb'));
   console.log(`models/trail.glb: ${pieces.length} pieces, ${tris} triangles`);
 }
-for (const [file, set] of [['scatter.glb', base], ['scatter_detail.glb', detail]])
-  model(file, [[set.tufts, 'blades', { alphaMode: 'MASK', alphaCutoff: 0.5, doubleSided: true }], [set.pebbles, 'cliff']]);
+for (const [file, sets] of [['scatter.glb', base], ['scatter_detail.glb', detail]]) {
+  const g = new Glb(), blades = g.pbr('blades', TEX, 'blades', { metal: 0, alphaMode: 'MASK', alphaCutoff: 0.5, doubleSided: true }), rock = g.pbr('cliff', TEX, 'cliff', { metal: 0 });
+  let tris = 0;
+  sets.forEach((set, i) => {
+    const prims = [[set.tufts, blades], [set.pebbles, rock]].filter(([m]) => !m.empty).map(([m, mt]) => { tris += m.idx.length / 3; return [geo(m), mt]; });
+    if (prims.length) g.sceneNodes.push(g.node({ name: `top${i}`, mesh: g.mesh(`top${i}`, prims) }));
+  });
+  g.write(join(MOD, file));
+  console.log(`models/${file}: ${sets.length} tops, ${tris} triangles`);
+}
 
 /** a tree standing at the origin: a tapered trunk with two boughs and a crown of lumpy leaf clusters */
 {

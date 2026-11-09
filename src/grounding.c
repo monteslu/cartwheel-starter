@@ -15,7 +15,8 @@
  * fixed to a wall) by putting its node in the group "airborne".
  *
  * Reply: {"things":N,"floating":K,"max_gap":metres,"list":[{"path","gap"},...],
- *         "standing":["path",...]}   (`grounding [tol]`, tol default 0.03 m)
+ *         "standing":["path",...]}   (`grounding [tol] [path]`, tol default 0.03 m; with a
+ *         path, also "on": what that thing stands on, and "gap")
  * The test's control lifts one standing thing 0.5 m with the `set` command and
  * this must then report it. */
 #include <float.h>
@@ -113,7 +114,9 @@ static void collect(void) {
   }
 }
 
+static int support; /* the thing gap_of found under it (-1: the ground or none) */
 static float gap_of(int i, float ground, float tol) {
+  support = -1;
   const t3_box3 *a = &T[i].b;
   float bottom = a->min.y;
   if (bottom <= ground + tol) return 0;
@@ -125,7 +128,7 @@ static float gap_of(int i, float ground, float tol) {
     if (b->max.x < a->min.x + e || b->min.x > a->max.x - e || b->max.z < a->min.z + e || b->min.z > a->max.z - e) continue;
     if (b->min.y - tol > bottom) continue; /* above it */
     float g = bottom > b->max.y ? bottom - b->max.y : 0; /* resting on it, or reaching into it */
-    if (g < best) best = g;
+    if (g < best) best = g, support = j;
   }
   return best;
 }
@@ -153,7 +156,22 @@ static void cmd_grounding(int argc, const char **argv, cw_reply *r) {
     cw_node_path(T[i].n, root, path, sizeof path);
     cw_reply_printf(r, "%s\"%s\"", k++ ? "," : "", path);
   }
-  cw_reply_printf(r, "]}");
+  cw_reply_printf(r, "]");
+  if (argc > 2) /* grounding <tol> <path>: what that thing stands on (for a check that disagrees) */
+    for (int i = 0; i < nt; i++) {
+      cw_node_path(T[i].n, root, path, sizeof path);
+      if (strcmp(path, argv[2])) continue;
+      float g = gap_of(i, ground, tol);
+      char on[256] = "the ground";
+      if (support >= 0) cw_node_path(T[support].n, root, on, sizeof on);
+      const t3_box3 *sb = support >= 0 ? &T[support].b : &T[i].b;
+      cw_reply_printf(r, ",\"on\":\"%s\",\"on_instance\":%d,\"gap\":%.3f,\"on_box\":[%.2f,%.2f,%.2f,%.2f,%.2f,%.2f],\"box\":[%.2f,%.2f,%.2f,%.2f,%.2f,%.2f]", on,
+                      support >= 0 ? T[support].inst : -1, g == FLT_MAX ? 999.0 : (double)g, (double)sb->min.x, (double)sb->min.y, (double)sb->min.z,
+                      (double)sb->max.x, (double)sb->max.y, (double)sb->max.z, (double)T[i].b.min.x, (double)T[i].b.min.y, (double)T[i].b.min.z,
+                      (double)T[i].b.max.x, (double)T[i].b.max.y, (double)T[i].b.max.z);
+      break;
+    }
+  cw_reply_printf(r, "}");
 }
 
 void grounding_register(void) {

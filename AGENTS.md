@@ -96,7 +96,8 @@ You cannot play it, so look at it, often:
   something. Build platforms as solid shapes down to the ground, put pickups
   on stands, keep feet on the floor while walking. Checked by
   `tests/grounding.mjs` (the `grounding` command of `src/grounding.c`).
-  Something that floats on purpose goes in the group `airborne`.
+  Something that floats on purpose goes in the group `airborne` (groups are
+  comma separated with no spaces: `groups="models/clouds.glb,airborne"`).
 - **No strobe.** Nothing flashes more than three times a second, and no large
   area flips light to dark in a frame: lights, pickups and transitions swell
   and fade over a tenth of a second or more (WCAG 2.3.1 and the Harding

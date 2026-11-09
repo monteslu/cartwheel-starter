@@ -38,7 +38,7 @@ for (const gpu of GPUS) {
     const victim = g.standing.find((p) => !/player/i.test(p));
     if (!victim) throw new Error('grounding control: nothing standing to lift');
     const got = await r.command(`get ${victim} position`), pos = got.values ? got.values.position.value : got.value;
-    const [x, y, z] = pos.match(/-?[\d.e+-]+/g).map(Number);
+    const [x, y, z] = pos.replace(/^vec3\(/, "").match(/-?[\d.]+(e-?\d+)?/g).map(Number); // "vec3(x, y, z)"
     await r.command(`set ${victim} position "vec3(${x}, ${y + 0.5}, ${z})"`);
     await r.step(1);
     const c = await r.command(`grounding ${tol}`);

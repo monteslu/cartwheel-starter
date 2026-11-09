@@ -33,3 +33,5 @@ depth+xcsm
 basic+map+trans+rep+ds
 standard+vcol+instbig+senv+l0401
 standard+vcol+instbig+senv+ds+l0401
+depth+instbig+xcsm
+standard+map+rep+instbig+nmap+ao+rmap+mmap+senv+l0401
