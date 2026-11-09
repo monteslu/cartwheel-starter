@@ -43,6 +43,9 @@ aa = SMAA
 vignette = true
 vignette_intensity = 0.2
 
+[node name="Lighting" parent="." type="LightingSettings"]
+mode = CLUSTERED
+
 [node name="Bounce" parent="." type="LightProbeGrid3D"]
 position = vec3(0, 0, -22)
 size = vec3(16, 14, 64)

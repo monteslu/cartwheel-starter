@@ -7,3 +7,12 @@ depth+xcsm_plain
 standard+senv+l0401+xcsm_plain
 physical+senv+cc+l0401+xcsm_plain
 physical+senv+sheen+l0401+xcsm_plain
+depth+xcluster_csm
+standard+senv+l0001+xcluster_csm_gi
+physical+senv+cc+l0001+xcluster_csm_gi
+physical+senv+sheen+l0001+xcluster_csm_gi
+depth+xcluster_csm_gi
+depth+xcluster_csm_plain_gi
+standard+senv+l0001+xcluster_csm_plain_gi
+physical+senv+cc+l0001+xcluster_csm_plain_gi
+physical+senv+sheen+l0001+xcluster_csm_plain_gi

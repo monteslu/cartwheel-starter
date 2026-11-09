@@ -97,8 +97,9 @@ Signing for stores: the engine's
 `scripts/deps.lock` pins an engine release and the sha256 of each SDK. A
 published SDK never changes, so a pinned version builds the same forever. To
 move to a newer engine, replace those lines with the newer release's (its
-release page lists each SDK's `.sha256`), then run `./programs.sh` and
-`./test.sh`.
+release page lists each SDK's `.sha256`) and the `cartwheel-file:tests/gate.mjs`
+line with that release's file and its sha256 (the engine's gate runner, which
+the SDKs do not carry), then run `./programs.sh` and `./test.sh`.
 
 ## License
 
