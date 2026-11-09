@@ -27,7 +27,7 @@ controls) and saves.
 ## Quick start
 
 ```sh
-npx romdevtools &   # the romdev server every run and check goes through (Node 24+; leave it running)
+nohup npx romdevtools > romdev.log 2>&1 &   # the romdev server every run and check goes through (Node 24+; leave it running)
 ./build.sh          # the game for this machine and the .wasc cart (fetches the engine SDK the first time)
 ./shot.sh           # screenshots of the game from the player's camera, through romdev: out/shots/
 ./test.sh           # every check, through romdev, on GL and WebGPU

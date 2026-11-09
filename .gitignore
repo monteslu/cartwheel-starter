@@ -5,3 +5,4 @@
 .cwcache/
 *.wasc
 *.wasm
+romdev.log

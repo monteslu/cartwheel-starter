@@ -3,9 +3,10 @@
 //   node tests/run.mjs [check ...] [--gpu gl|webgpu]
 // Checks: prompts (no GPU); budget, grounding, newcomer, gates, text (the cart through romdev, on GL and WebGPU).
 import { spawnSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { sdkTools } from './lib/romdev.mjs';
+import { project, sdkTools } from './lib/romdev.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const argv = process.argv.slice(2);
@@ -43,6 +44,17 @@ const CHECKS = {
   },
 };
 
+// the apps the engine's tools are told to run are this game's (project.cwproj app, and <app>_auto) and are built:
+// a renamed game renames them in tests/gates.json and tests/text.json too (CMakeLists.txt builds no others)
+const needsCarts = !names.length || names.some((n) => n !== 'prompts');
+const { app: APP } = project(ROOT);
+for (const [file, apps] of needsCarts ? [['tests/gates.json', (j) => j.map((g) => g.app)], ['tests/text.json', (j) => [j.app, ...j.screens.map((s) => s.app)]]] : []) {
+  for (const app of new Set(apps(JSON.parse(readFileSync(join(ROOT, file), 'utf8'))).filter(Boolean)))
+    if (![APP, APP + '_auto'].includes(app) || !existsSync(join(ROOT, 'build/cart-wgpu/carts', app + '.wasc'))) {
+      console.error(`${file} names the app "${app}": ${[APP, APP + '_auto'].includes(app) ? 'it has no cart yet: ./build.sh' : `this game's apps are "${APP}" and "${APP}_auto" (project.cwproj app): rename it`}`);
+      process.exit(2);
+    }
+}
 const unknown = names.filter((n) => !CHECKS[n]);
 if (unknown.length) { console.error(`unknown check(s): ${unknown.join(', ')} (checks: ${Object.keys(CHECKS).join(', ')})`); process.exit(2); }
 let failed = [];

@@ -32,11 +32,14 @@ the first build, and the guides at
 ## 1. Set up
 
 ```sh
-npx romdevtools &   # the romdev server: every run, screenshot and check goes through it (Node 24+)
+nohup npx romdevtools > romdev.log 2>&1 &   # the romdev server: every run, screenshot and check goes through it (Node 24+)
 ./build.sh          # build/native/<app> and build/cart-wgpu/carts/<app>.wasc (+ <app>_auto)
 ```
 
-romdev listens on `http://127.0.0.1:7331`. Leave it running. To drive it
+romdev listens on `http://127.0.0.1:7331`. Leave it running (an agent's shell
+may end its background jobs when a command ends: `nohup`, or a terminal of
+its own, keeps it alive). If something else already serves romdev on that
+port, use it; never start a second one. To drive it
 yourself as an MCP client: `claude mcp add --transport http romdev
 http://127.0.0.1:7331/mcp`; the scripts here talk to its HTTP route and need
 no MCP client. `<app>` is `app` in `project.cwproj`.
@@ -94,8 +97,8 @@ You cannot play it, so look at it, often:
   Something that floats on purpose goes in the group `airborne`.
 - **No strobe.** Nothing flashes more than three times a second, and no large
   area flips light to dark in a frame: lights, pickups and transitions swell
-  and fade over a tenth of a second or more. Checked against WCAG 2.3.1 and
-  the Harding thresholds.
+  and fade over a tenth of a second or more (WCAG 2.3.1 and the Harding
+  thresholds). Not checked by `./test.sh` yet: see "Pending" below.
 - **No screen shake.** The camera never shakes. A hit or a blast is felt in
   the pads (`cw_input_rumble`).
 - **Readable text.** Body text at least 2.4% of the screen height (26 px at
@@ -111,7 +114,9 @@ You cannot play it, so look at it, often:
 - **A real quality range, never by lowering resolution.** The engine's
   presets (Very Low to Ultra, Auto) cut shadows, effects, post and density;
   each preset must cost less than the one above, and Very Low must still look
-  like the game. Never lower the render resolution to save time: Resolution is
+  like the game (not timed by `./test.sh` yet: see "Pending" below). The
+  sample starts on Auto (`cw_quality_auto`), which steps down until the
+  frame fits a handheld's GPU. Never lower the render resolution to save time: Resolution is
   the player's own setting and Auto never touches it. Thin your own scenery
   with `cw_quality_density()` and add your own levers with
   `cw_quality_lever_add`.
@@ -181,8 +186,10 @@ values the HUD draws, so the checks read what the player sees.
 Keep `./test.sh` green after every step.
 
 1. **Name it.** In `project.cwproj`: `name`, `app` (a C identifier: the
-   executable, the cart, the packages), `app_id`, `description`. Nothing else
-   names the game.
+   executable, the cart, the packages), `app_id`, `description`; the title in
+   `cw_shell_init`; and the `app` names in `tests/gates.json` and
+   `tests/text.json` (`<app>` and `<app>_auto`: `./test.sh` stops and names
+   the file when one names a cart that does not exist). Then `./build.sh`.
 2. **Pick the archetype** (section 0) and read that game's source.
 3. **The level.** Edit `main.cwscene` (the world: sky, sun, fog, probes,
    post, the level's bodies) and `scenes/` (the player, pickups, props). Keep
