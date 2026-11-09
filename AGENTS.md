@@ -11,7 +11,9 @@ replaced. This file is the playbook: read it all before writing code.
 1. The engine's
    [AGENTS.md](https://github.com/monteslu/cartwheel-engine/blob/main/AGENTS.md):
    how the engine wants to be used, its errors and what they mean, and its
-   "Game archetypes" table.
+   "Game archetypes" table. The same file ships in the SDK:
+   `deps/cartwheel-sdk/<platform>/AGENTS.md` after the first `./build.sh`, for
+   the engine version this game pins.
 2. Find the closest archetype in that table: games by type in
    [cartwheel-examples](https://github.com/monteslu/cartwheel-examples),
    [more-cartwheel-examples](https://github.com/monteslu/more-cartwheel-examples) and
@@ -191,11 +193,12 @@ Keep `./test.sh` green after every step.
    `tests/text.json` (`<app>` and `<app>_auto`: `./test.sh` stops and names
    the file when one names a cart that does not exist). Then `./build.sh`.
 2. **Pick the archetype** (section 0) and read that game's source.
-3. **The level.** Edit `main.cwscene` (the world: sky, sun, fog, probes,
+3. **The level.** Edit `main.cwscene` (the world: sky, sun, fog, terrain,
    post, the level's bodies) and `scenes/` (the player, pickups, props). Keep
    every platform a solid shape down to the ground. Use the engine's node
    types; their properties are in the engine's `docs/nodes.json` and answer
    `props <node>` over the debug channel.
+   Then `node tools/make-art.mjs` and `./build.sh` (section 6).
 4. **The player.** `scenes/player.cwscene` is the body (collision capsule and
    a jointed rig); `move_player` in `src/main.c` moves it. Keep coyote time,
    the jump buffer and the walk that keeps a foot planted.
@@ -214,6 +217,35 @@ Keep `./test.sh` green after every step.
 9. **Materials and lights changed?** `./programs.sh`, then `./build.sh`.
 10. **Look** (`./shot.sh`) and **check** (`./test.sh`). Then the next step.
 
+## 6. Art: `tools/make-art.mjs`
+
+Every texture and model is made by `tools/make-art.mjs` (plain Node, no
+dependencies, nothing downloaded) into `textures/` and `models/`. Run it after
+changing the level, then `./build.sh` (and `./programs.sh` when a new kind of
+material appears).
+
+- **The level's blocks are their collision boxes** in `main.cwscene`. The
+  script reads every StaticBody3D in a `dress_*` group and builds its look into
+  `models/trail.glb`: `dress_flag` (flagstone top, rock sides), `dress_grass`
+  (grass top with tufts and pebbles), `dress_rock`, `dress_plinth` (cut stone),
+  `dress_column` (a fluted column on its capsule). Texture coordinates are
+  world positions, so any size of block is textured at the same scale. Move or
+  resize a block, rerun the script, and its look follows.
+- **A model is shown by a node in the group named by its path**:
+  `[node name="Trail" type="Node3D" groups="models/trail.glb"]`. `dress_models`
+  in `src/main.c` lists the models; every file the game loads by name must also
+  be listed in `roots.txt` (the packer follows scene files, not strings).
+- **Textures** are functions of (u, v) filling albedo, height, roughness and
+  occlusion (`flag`, `cliff`, `grass`, ...); `writeSet` turns the height into a
+  normal map and writes `_c`, `_n` and `_orm` PNGs, embedded into the models.
+- **The landscape** is a `Terrain3D` node: the script writes its 16-bit
+  heightmap, its splat map (grass, rock, scree by slope) and its layers.
+  `TerrainScatter3D` children grow grass, rocks and trees on it.
+- **Scenery** (`cw_quality_lever_add` in `init`): the game's own graphics
+  setting. From Medium up it shows `models/scatter_detail.glb`, twice the
+  grass. Use a lever like it for anything the presets should thin.
+
+
 ## Layout
 
 | Path | What |
@@ -221,6 +253,8 @@ Keep `./test.sh` green after every step.
 | `src/main.c` | the game |
 | `src/grounding.c` | the `grounding` debug command (game-agnostic: keep it) |
 | `main.cwscene`, `scenes/` | the world and its pieces, as scene files |
+| `tools/make-art.mjs`, `tools/lib/` | the art generator, its texture toolkit and glTF writer |
+| `models/`, `textures/` | the generated art (committed; rerun the generator to change it) |
 | `project.cwproj` | name, app, input map (`input.*`), physics layers, render size, export presets |
 | `roots.txt` | what gets packed (scenes reach the rest) |
 | `programs/` | the three.c program table: the material states the game draws (`./programs.sh`) |

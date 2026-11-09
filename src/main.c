@@ -11,11 +11,13 @@
  * and effects volume, text size, split screen. This file answers its hooks.
  *
  * The world is main.cwscene (and scenes/: the player, a lantern, a tree, a
- * crate), made of the engine's node types: a procedural sky and sun with
- * cascaded shadows, height fog, a light probe grid (bounce light) and a
- * reflection probe, PBR materials (colour, roughness, metalness, sheen on
- * cloth), static bodies for the level, rigid bodies for the crates and a
- * CharacterBody3D per player.
+ * crate), made of the engine's node types: a procedural sky and a low sun
+ * with cascaded shadows, volumetric height fog, a Terrain3D canyon with
+ * grass, rock and tree scatter, static bodies for the level, rigid bodies
+ * for the crates and a CharacterBody3D per player. The art (PBR texture
+ * sets, the models that dress the level's blocks, the clouds, the terrain's
+ * maps) is made by tools/make-art.mjs; dress_models() below puts the models
+ * on the nodes that name them.
  *
  * The shape of the game:
  *   - init(): the input map (project.cwproj input.*), the shell, the sounds,
@@ -53,6 +55,7 @@
 #include "cartwheel/prompt.h"
 #include "cartwheel/quality.h"
 #include "cartwheel/render2d.h"
+#include "cartwheel/resource.h"
 #include "cartwheel/scene_file.h"
 #include "cartwheel/shell.h"
 #include "cartwheel/ui.h"
@@ -163,11 +166,47 @@ static void hint_exited(cw_node area, const cw_value *args, int argc, void *user
   if (p >= 0 && G.in_hint[p] > 0) G.in_hint[p]--;
 }
 
+/* ── models: tools/make-art.mjs writes them; a node in the group named by a model's path shows that model ── */
+
+static const char *const MODELS[] = { "models/trail.glb", "models/scatter.glb", "models/scatter_detail.glb", "models/clouds.glb",
+                                      "models/tree.glb", "models/crate.glb" };
+
+/* A graphics setting of the game's own (Settings > Graphics, saved with the rest, set by the presets): the extra grass
+ * and pebbles of models/scatter_detail.glb from Medium up. Render-only: nothing in the simulation reads it. */
+static int scenery_lever = -1;
+static void apply_quality(cw_quality q, void *user) {
+  (void)q, (void)user;
+  cw_node n = cw_node_get(level(), "ScatterDetail");
+  if (n.id) cw_node_set(n, "visible", cw_val_bool(cw_gfx_get(scenery_lever) > 0));
+}
+
+static void shadows_on(t3_object *o, void *user) {
+  (void)user;
+  o->cast_shadow = o->receive_shadow = true;
+}
+
+static void dress_models(void) {
+  for (size_t m = 0; m < sizeof MODELS / sizeof MODELS[0]; m++) {
+    cw_res res = cw_res_load(MODELS[m], CW_RES_GLTF); /* loaded once, then shared */
+    cw_node *nodes;
+    int n = cw_tree_group(cw_scene_app_tree(), MODELS[m], &nodes);
+    for (int i = 0; i < n; i++) {
+      t3_object *o = cw_gltf_instantiate(res);
+      if (!o) { cw_error("%s did not load: run node tools/make-art.mjs, and list it in roots.txt", MODELS[m]); return; }
+      if (!cw_node_in_group(nodes[i], "airborne")) t3_object_traverse(o, shadows_on, NULL); /* not the sky's clouds */
+      t3_object_add(cw_node3d_object(nodes[i]), o);
+      t3_release(o); /* the node's object keeps it */
+    }
+  }
+}
+
 /* ── the shell's Play: the world as authored, for n players ─────────── */
 
 static void start(int players, void *user) {
   (void)user;
   cw_scene_app_change_scene("main.cwscene", false);
+  dress_models();
+  apply_quality(cw_quality_get(), NULL);
   int32_t best = G.best;
   memset(&G, 0, sizeof G);
   G.best = best;
@@ -224,6 +263,9 @@ static void init(void *user) {
     .screen_changed = shell_screen,
   });
   accept = cw_action_find("ui_accept"); /* the shell defines it */
+  static const char *const scenery[] = { "Sparse", "Full" };
+  scenery_lever = cw_quality_lever_add("Scenery", scenery, 2, (cw_quality_lever_presets){ .very_low = 0, .low = 0, .medium = 1, .high = 1, .ultra = 1 });
+  cw_quality_on_change(apply_quality, NULL);
   snd_lantern = tone(660, 0.35f, 1320, 0.35f); /* sounds after the shell, which starts the mixer */
   snd_beacon = tone(440, 1.2f, 880, 0.35f);
   snd_fall = tone(400, 0.4f, 120, 0.3f);

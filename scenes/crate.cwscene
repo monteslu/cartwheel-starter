@@ -9,17 +9,4 @@ friction = 0.7
 [node name="Shape" parent="." type="CollisionShape3D"]
 size = vec3(0.8, 0.8, 0.8)
 
-[node name="Wood" parent="." type="MeshInstance3D"]
-size = vec3(0.8, 0.8, 0.8)
-color = color(0.42, 0.26, 0.12, 1)
-roughness = 0.8
-cast_shadow = true
-receive_shadow = true
-
-[node name="Band" parent="." type="MeshInstance3D"]
-size = vec3(0.84, 0.12, 0.84)
-color = color(0.25, 0.25, 0.27, 1)
-metalness = 1
-roughness = 0.45
-cast_shadow = true
-receive_shadow = true
+[node name="Look" parent="." type="Node3D" groups="models/crate.glb"]

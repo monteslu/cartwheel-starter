@@ -1,2 +1,16 @@
 project.cwproj
 main.cwscene
+models/clouds.glb
+models/crate.glb
+models/scatter.glb
+models/scatter_detail.glb
+models/trail.glb
+models/tree.glb
+textures/terrain_dirt_albedo.png
+textures/terrain_dirt_normal.png
+textures/terrain_grass_albedo.png
+textures/terrain_grass_normal.png
+textures/terrain_height.png
+textures/terrain_rock_albedo.png
+textures/terrain_rock_normal.png
+textures/terrain_splat.png

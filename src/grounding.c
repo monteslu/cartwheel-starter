@@ -2,9 +2,11 @@
  * file into any cartwheel 3D game and call grounding_register() in init.
  * tests/grounding.mjs sends the command to the cart under romdev.
  *
- * A "thing" is each child of the scene's root node (a platform, a tree, a
- * crate, a player: everything under it is one thing), and each instance of
- * an instanced mesh. Its box is the world bounding box of every visible mesh
+ * A "thing" is each child of the scene's root node that is a body or an area
+ * (a tree, a crate, a player, a pickup: everything under it is one thing),
+ * each mesh under any other child (a plain Node3D holding a model of many
+ * pieces, such as the level's dressing: each piece is judged alone, reported
+ * as its "instance" number), and each instance of an instanced mesh. Its box is the world bounding box of every visible mesh
  * under it. A thing stands when the bottom of its box
  *   - is within `tol` of the lowest bottom in the level (the ground), or
  *   - touches another thing: some other box overlaps its footprint (by more
@@ -59,7 +61,7 @@ static bool hidden(const t3_object *o) {
   return false;
 }
 
-typedef struct { t3_box3 b; bool any; cw_node n; } walk_ctx;
+typedef struct { t3_box3 b; bool any, each; cw_node n; int part; } walk_ctx;
 
 static void visit(t3_object *o, void *user) {
   walk_ctx *w = user;
@@ -77,6 +79,12 @@ static void visit(t3_object *o, void *user) {
       grow_box(&b, &m->geometry->bounding_box, world);
       T[nt++] = (thing){ b, w->n, i };
     }
+    return;
+  }
+  if (w->each) { /* a piece of a model: a thing of its own */
+    t3_box3 b = { { FLT_MAX, FLT_MAX, FLT_MAX }, { -FLT_MAX, -FLT_MAX, -FLT_MAX } };
+    grow_box(&b, &m->geometry->bounding_box, o->matrix_world.e);
+    if (nt < MAX_THINGS) T[nt++] = (thing){ b, w->n, w->part++ };
     return;
   }
   grow_box(&w->b, &m->geometry->bounding_box, o->matrix_world.e);
@@ -98,7 +106,8 @@ static void collect(void) {
     t3_object *o = cw_node3d_object(c);
     if (!o || airborne(c)) continue;
     t3_object_update_matrix_world(o, true);
-    walk_ctx w = { { { FLT_MAX, FLT_MAX, FLT_MAX }, { -FLT_MAX, -FLT_MAX, -FLT_MAX } }, false, c };
+    walk_ctx w = { { { FLT_MAX, FLT_MAX, FLT_MAX }, { -FLT_MAX, -FLT_MAX, -FLT_MAX } }, false,
+                   !cw_node_is(c, "CollisionObject3D"), c, 0 };
     t3_object_traverse(o, visit, &w);
     if (w.any && nt < MAX_THINGS) T[nt++] = (thing){ w.b, c, -1 };
   }

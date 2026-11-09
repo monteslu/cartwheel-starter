@@ -53,19 +53,6 @@ fetch_sdk() {
   echo "$ver $sha" > "$dst/.version"
 }
 
-# fetch_engine_files <dir>: the engine files scripts/deps.lock pins beside the SDKs (cartwheel-file:<path> lines: the
-# engine's gate runner, tests/gate.mjs, which the SDK does not carry) into <dir>/<path>, sha256 checked
-fetch_engine_files() {
-  local dir=$1 path url ver sha
-  while read -r key url ver sha; do
-    path=${key#cartwheel-file:}
-    [ -f "$dir/$path" ] && echo "$sha  $dir/$path" | sha_check 2>/dev/null && continue
-    mkdir -p "$(dirname "$dir/$path")"
-    curl -fsSL "$url" -o "$dir/$path.part" || { echo "download failed: $url" >&2; exit 1; }
-    echo "$sha  $dir/$path.part" | sha_check || { echo "$url: sha256 mismatch" >&2; rm -f "$dir/$path.part"; exit 1; }
-    mv -f "$dir/$path.part" "$dir/$path"
-  done < <(grep -E '^cartwheel-file:' "$ROOT/scripts/deps.lock")
-}
 
 # sdk <target>: its directory, fetched (and its toolchain) on first use.
 # CARTWHEEL_SDK=<dir holding <target>/ directories> uses other SDKs (an
@@ -74,7 +61,6 @@ sdk() {
   local t=$1
   if [ -n "${CARTWHEEL_SDK:-}" ]; then echo "$CARTWHEEL_SDK/$t"; return; fi
   fetch_sdk "$t" >&2
-  [ "$t" = cart-wgpu ] || fetch_engine_files "$SDKS/$t" >&2
   case "$t" in
     cart-wgpu) "$SDKS/$t/scripts/fetch-deps.sh" --only wasi-sdk,binaryen >/dev/null ;; # the exact wasi-sdk its bitcode needs
   esac
