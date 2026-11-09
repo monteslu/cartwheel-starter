@@ -14,8 +14,8 @@ mkdir -p "$ROOT/out/release"
 if [ "$t" = wasc ]; then # the release cart (GL and WebGPU in one .wasc): ThinLTO and wasm-opt
   cart=$(sdk cart-wgpu)
   configure cart-wgpu-release "$cart" -DCMAKE_TOOLCHAIN_FILE="$cart/cmake/cart.cmake" -DCW_CWPACK="$native/bin/cwpack"
-  ninja -C "$ROOT/build/cart-wgpu-release" gemdash
-  cp "$ROOT/build/cart-wgpu-release/carts/gemdash.wasc" "$ROOT/out/release/gemdash-$ver.wasc"
+  ninja -C "$ROOT/build/cart-wgpu-release" $APP
+  cp "$ROOT/build/cart-wgpu-release/carts/$APP.wasc" "$ROOT/out/release/$APP-$ver.wasc"
   ls -l "$ROOT/out/release"
   exit 0
 fi

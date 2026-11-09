@@ -1,42 +1,21 @@
 [
   {
-    "name": "match",
-    "note": "gemdash_auto: two bots play 1200 ticks (20 s). The state is the same on GL and WebGPU and on every platform, so the expected values are exact.",
-    "app": "gemdash_auto",
-    "frames": 1200,
-    "expect": {
-      "shell.screen": 3,
-      "game.players": 2,
-      "game.ticks": 1200,
-      "game.gems": [
-        20,
-        11,
-        0,
-        0
-      ],
-      "game.total": 31,
-      "game.hash": 1797760741
-    }
+    "name": "trail",
+    "note": "the autopilot plays the trail to the beacon: the same state on GL and WebGPU (romdev), a real picture, the text floor, no missing program state. Control: one frame short.",
+    "app": "lanterntrail_auto",
+    "frames": 700,
+    "hosts": ["romdev"],
+    "webgpu": true,
+    "expect": { "game.done": 1, "game.lanterns": 3, "game.respawns": 0 }
   },
   {
     "name": "menus",
-    "note": "the shell's screens from pad 0 (tests/menus.input: frame, pad buttons, axes): south on Play opens the join screen, south joins pad 1, Start begins a one-player match, Start pauses it",
-    "app": "gemdash",
-    "frames": 120,
-    "input": "tests/menus.input",
-    "expect": {
-      "shell.screen": 4,
-      "shell.players": 1,
-      "game.players": 1
-    }
-  },
-  {
-    "name": "screenshot",
-    "note": "a frame of the match was drawn: the screenshot has the arena's colours, not one flat colour",
-    "app": "gemdash_auto",
-    "frames": 300,
-    "screenshot": {
-      "min_colors": 200
-    }
+    "note": "the shell's screens from pad 0 (tests/input/menus.json): south on Play opens the join screen, south takes seat 1, Start plays.",
+    "app": "lanterntrail",
+    "frames": 240,
+    "input": "input/menus.json",
+    "hosts": ["romdev"],
+    "webgpu": true,
+    "expect": { "shell.screen": 3, "shell.players": 1, "game.players": 1 }
   }
 ]

@@ -1,124 +1,227 @@
-# Working on this game
+# Making a game from this template
 
-A cartwheel game: C, built against a prebuilt engine SDK, running natively
-(Linux, Windows, macOS, Android) and as a `.wasc` cart. The title screen,
-player join, pause menu, settings, saves, menu input, volume, graphics
-settings and split screen are done for you by the engine's shell
-(`cartwheel/shell.h`). Customise them through `cw_shell_init` in
-`src/main.c`, and put your effort into gameplay and graphics.
+This repository is a cartwheel game: C, built against a prebuilt engine SDK,
+shipped as one `.wasc` cart (GL and WebGPU) and as native builds for Linux,
+Windows, macOS and Android. The sample game, Lantern Trail, is here to be
+replaced. This file is the playbook: read it all before writing code.
+(`CLAUDE.md` is this same file.)
+
+## 0. Read first
+
+1. The engine's
+   [AGENTS.md](https://github.com/monteslu/cartwheel-engine/blob/main/AGENTS.md):
+   how the engine wants to be used, its errors and what they mean, and its
+   "Game archetypes" table.
+2. Find the closest archetype in that table: games by type in
+   [cartwheel-examples](https://github.com/monteslu/cartwheel-examples),
+   [more-cartwheel-examples](https://github.com/monteslu/more-cartwheel-examples) and
+   [even-more-cartwheel-examples](https://github.com/monteslu/even-more-cartwheel-examples).
+   Study or copy that game's systems (its camera, its movement, its enemies,
+   its HUD) before writing new ones. Copying a working system beats inventing
+   one.
+3. `src/main.c`: the whole sample in one readable file. Its header comment is
+   the map of a cartwheel game.
+
+The engine's headers are its API reference, for the version pinned in
+`scripts/deps.lock`: `deps/cartwheel-sdk/<platform>/include/cartwheel/` after
+the first build, and the guides at
+<https://github.com/monteslu/cartwheel-engine/tree/main/docs/guides>
+(`game-shell.md`, `rendering-3d.md`, `physics.md`, `input.md`,
+`debug-channel.md`, `testing.md`). Read the guide before you use a system.
+
+## 1. Set up
+
+```sh
+npx romdevtools &   # the romdev server: every run, screenshot and check goes through it (Node 24+)
+./build.sh          # build/native/<app> and build/cart-wgpu/carts/<app>.wasc (+ <app>_auto)
+```
+
+romdev listens on `http://127.0.0.1:7331`. Leave it running. To drive it
+yourself as an MCP client: `claude mcp add --transport http romdev
+http://127.0.0.1:7331/mcp`; the scripts here talk to its HTTP route and need
+no MCP client. `<app>` is `app` in `project.cwproj`.
+
+## 2. The loop: build, run, look, check
+
+| Step | Command | What it does |
+|---|---|---|
+| build | `./build.sh` | the native game and the cart; no warnings allowed |
+| look | `./shot.sh [frames...]` | the autopilot cart in romdev at Very Low and High, on GL and WebGPU: `out/shots/*.png` and a sheet `out/shots/sheet.png` |
+| check | `./test.sh [--gpu gl\|webgpu] [check ...]` | every check below, through romdev, each with its control |
+| play | `./run.sh` | the game in a window (for a human; agents look through `./shot.sh`) |
+| one check | `./test.sh newcomer` (or prompts, grounding, gates, text, budget) | while you work on one thing; the whole `./test.sh` before you call it done |
+| tables | `./programs.sh`, then `./build.sh` | after a new material, light setup or effect: the game shows a red "no program" banner until you do |
+
+Work in small steps. After each one: build, look, check. A change is done
+when `./test.sh` is green on GL and WebGPU **and** you have looked at the
+screenshots and they show what you meant.
+
+### How to see the game
+
+You cannot play it, so look at it, often:
+
+- `./shot.sh` writes frames of the autopilot cart (the game playing itself
+  from its own on-screen cues) from the player's camera, at Very Low and
+  High, GL and WebGPU, and a contact sheet of them. Open the sheet and the
+  frames and **look**: is the player readable against the ground? Does
+  anything float, clip, flicker or sit in the dark? Is the HUD readable? Does
+  Very Low still look like the same game?
+- A screenshot downscaled for viewing hides fine faults: crop a region at
+  native size when judging edges, shadows or text.
+- Stills cannot prove a game plays well. The newcomer check plays it; read
+  its trace (`out/newcomer/*.json`: time, the cue it saw, what it pressed, the
+  progress fields) when it fails.
+- With romdev as an MCP client you can also load the cart yourself
+  (`loadMedia`, `frame`, `input`, `wasm({op:'debugState'})`,
+  `wasm({op:'command', text:'help'})`). Send ranges: one `frame` step or
+  `input` sequence of many frames, then read once. Never a request per frame.
+
+## 3. The rules a game must meet
+
+`./test.sh` checks most of these. The rest are yours to look for.
+
+- **A newcomer can finish level 1.** Someone who has never seen the game must
+  be able to finish the first level from what the screen shows: where to go
+  (an arrow, a marker, a lit path) and what to press (a prompt at the moment
+  it is needed). Make jumps and timing forgiving (coyote time, a jump
+  buffer); a mistake sends the player back a little, not to the start. A
+  multiplayer game must be finishable with a second seat joined and idle.
+  Checked by `tests/newcomer.mjs`.
+- **Nothing floats.** Every prop, pickup, platform and character stands on
+  something. Build platforms as solid shapes down to the ground, put pickups
+  on stands, keep feet on the floor while walking. Checked by
+  `tests/grounding.mjs` (the `grounding` command of `src/grounding.c`).
+  Something that floats on purpose goes in the group `airborne`.
+- **No strobe.** Nothing flashes more than three times a second, and no large
+  area flips light to dark in a frame: lights, pickups and transitions swell
+  and fade over a tenth of a second or more. Checked against WCAG 2.3.1 and
+  the Harding thresholds.
+- **No screen shake.** The camera never shakes. A hit or a blast is felt in
+  the pads (`cw_input_rumble`).
+- **Readable text.** Body text at least 2.4% of the screen height (26 px at
+  1080 lines), nothing under 1.7% (`cartwheel/render2d.h`, "text size"). Size
+  text from `cw_r2d_canvas_size().y`; the sample uses 3.6%. Draw the HUD only
+  while `cw_shell_hud_shown()`.
+- **Prompts never name a button.** Never "A: jump", "press X", "RT", or a
+  colour of a button. Name the action and let the engine draw the glyph for
+  the device each player holds: `cw_prompt_text(font, "{jump} jump", player,
+  ...)` (`cartwheel/prompt.h`). Bind every movement action to the d-pad and
+  the stick, and everything else to a button (pads may lack sticks and
+  analog triggers). Checked by the SDK's `check-prompts.mjs`.
+- **A real quality range, never by lowering resolution.** The engine's
+  presets (Very Low to Ultra, Auto) cut shadows, effects, post and density;
+  each preset must cost less than the one above, and Very Low must still look
+  like the game. Never lower the render resolution to save time: Resolution is
+  the player's own setting and Auto never touches it. Thin your own scenery
+  with `cw_quality_density()` and add your own levers with
+  `cw_quality_lever_add`.
+- **Athletic proportions.** Characters are adults with athletic builds: about
+  7.5 heads tall, shoulders wider than hips, long legs (half the height). No
+  big-head, stubby-limbed figures unless the design asks for them.
+- **Matte cloth.** Cloth is rough (roughness 0.85 or more, metalness 0;
+  `sheen` for soft fabric). Only leather, vinyl, rubber and metal shine. Skin
+  is moderate (about 0.6).
+- **Determinism.** The simulation runs only in `fixed_update`, from the input
+  snapshot and `cw_rng`; never the wall clock, one `cw_rng_*` call per
+  statement, no `-ffast-math`. GL and WebGPU must reach the same state.
+- **Keep the frame cheap.** Work per frame scales with what is on screen; no
+  allocation in hot loops; instance repeated things. The target is a handheld
+  GPU at 60 frames a second.
+- **No hardcoded paths.** Assets go through `roots.txt` and asset paths.
+
+## 4. The checks (`./test.sh`)
+
+Each check runs the cart through romdev on GL and WebGPU, and runs a control
+that must fail. A check whose control passes is reported as a failure: it
+could not tell good from bad.
+
+| Check | File | Its control |
+|---|---|---|
+| prompts | the SDK's `tools/check-prompts.mjs` over `src/` and the scenes | `tests/fixtures/prompt-control.c`, which names a button |
+| newcomer | `tests/newcomer.mjs` | the same bot ignoring the cues |
+| grounding | `tests/grounding.mjs` | one standing thing lifted 0.5 m |
+| gates | the engine's `tests/gate.mjs --hosts romdev` over `tests/gates.json`: the autopilot finishes the trail and the menus reach play, the same state on GL and WebGPU, a real picture, the text floor, no missing program state | each run one frame short |
+| text | the engine's `tools/check-text.mjs` over `tests/text.json`'s screens (title, join, play, finished, pause, settings, graphics) | the same screens at half text size |
+| budget | every check's romdev client (`tests/lib/romdev.mjs`) stops a check that sends more than 40 requests plus 10 a second of game time | a loop stepping one frame a request |
+
+Pending, not in `./test.sh` yet, because romdev cannot do them for a cart:
+
+- **flash** (WCAG 2.3.1 and Harding, with its 8 Hz control): the engine's
+  `tools/flash-check.mjs` needs every frame of a run, and romdev has no ranged
+  frame capture yet. Until then, keep the rule by construction: lights and
+  transitions swell and fade (the beacon's flame, the respawn dip in
+  `src/main.c`), never on or off in a frame.
+- **quality range** (each preset cheaper than the one above, with the
+  every-preset-is-High control): the engine's `tools/quality-range.mjs`
+  times the GPU, and a cart on romdev has no GPU timer yet. Until then, look
+  at Very Low against High in `./shot.sh`'s sheet and keep Very Low the
+  same game.
+
+Every check sends romdev ranges: one input sequence or frame step for many
+frames, then one read. Never a request per frame: romdev is shared, and the
+budget above fails a check that loops.
+
+What a new game fills in, in `tests/game.json`:
+
+- `newcomer.goal`: the debug field and value that mean level 1 is finished
+  (`{"field": "game.done", "equals": 1}`).
+- `newcomer.move`: the debug field holding the on-screen direction cue, per
+  player, as x right and y up on the screen (what the HUD arrow shows).
+- `newcomer.press`: debug fields that are 1 while a button prompt shows, and
+  the pad button that prompt's action is bound to.
+- `newcomer.players`: more than 1 adds the idle-second-seat run.
+- `grounding.frames`: frames of the autopilot cart when nothing should be in
+  the air.
+
+Publish those fields from the game with `cw_debug_*` in `init`, from the same
+values the HUD draws, so the checks read what the player sees.
+
+## 5. Replace the sample game, step by step
+
+Keep `./test.sh` green after every step.
+
+1. **Name it.** In `project.cwproj`: `name`, `app` (a C identifier: the
+   executable, the cart, the packages), `app_id`, `description`. Nothing else
+   names the game.
+2. **Pick the archetype** (section 0) and read that game's source.
+3. **The level.** Edit `main.cwscene` (the world: sky, sun, fog, probes,
+   post, the level's bodies) and `scenes/` (the player, pickups, props). Keep
+   every platform a solid shape down to the ground. Use the engine's node
+   types; their properties are in the engine's `docs/nodes.json` and answer
+   `props <node>` over the debug channel.
+4. **The player.** `scenes/player.cwscene` is the body (collision capsule and
+   a jointed rig); `move_player` in `src/main.c` moves it. Keep coyote time,
+   the jump buffer and the walk that keeps a foot planted.
+5. **The goal and the cues.** Replace the lanterns and the beacon with your
+   level's goal. Whatever your game asks of the player, show it on screen
+   (an arrow, a marker, a prompt) and publish it as a debug field. Update
+   `tests/game.json`.
+6. **The HUD.** `hud()` in `src/main.c`: text sized from the canvas height,
+   prompts by action, drawn in each player's `cw_shell_player_rect`.
+7. **The shell.** `cw_shell_init` in `init`: title, players (1 to 4), save
+   data. The shell gives you the title, join, pause, settings and saves;
+   do not write your own.
+8. **The autopilot.** `<app>_auto` (`GAME_AUTOPILOT`) plays the game from its
+   own cues, straight into play. Keep it playing your game: `./shot.sh` and
+   the grounding, flash and quality checks run it.
+9. **Materials and lights changed?** `./programs.sh`, then `./build.sh`.
+10. **Look** (`./shot.sh`) and **check** (`./test.sh`). Then the next step.
 
 ## Layout
 
 | Path | What |
 |---|---|
-| `src/main.c` | the game: start it here |
-| `main.cwscene`, `gem.cwscene` | the world, as scene files (built-in node types) |
-| `project.cwproj` | name, input map (`input.*`), render size, export presets |
-| `roots.txt` | what gets packed into the game (scenes reach the rest) |
-| `programs/` | the three.c program table: the material states the game draws (`./programs.sh` rewrites it) |
-| `tests/gates.json`, `tests/run.mjs` | the tests `./test.sh` runs |
+| `src/main.c` | the game |
+| `src/grounding.c` | the `grounding` debug command (game-agnostic: keep it) |
+| `main.cwscene`, `scenes/` | the world and its pieces, as scene files |
+| `project.cwproj` | name, app, input map (`input.*`), physics layers, render size, export presets |
+| `roots.txt` | what gets packed (scenes reach the rest) |
+| `programs/` | the three.c program table: the material states the game draws (`./programs.sh`) |
+| `tests/` | the checks, `tests/game.json` (the game's facts they need), `tests/lib/romdev.mjs` (the romdev client) |
 | `scripts/deps.lock` | the engine version and its SDKs (sha256-pinned) |
-| `deps/`, `build/`, `out/` | fetched SDKs, build trees, test output and screenshots (not committed) |
+| `deps/`, `build/`, `out/` | fetched SDKs, build trees, check output and screenshots (not committed) |
 
-## Commands
+## Releases
 
-| Command | Does |
-|---|---|
-| `./build.sh` | builds the game for this machine (`build/native/gemdash`) and the cart (`build/cart-wgpu/carts/gemdash.wasc`, one `.wasc` that draws with GL or WebGPU, whichever the host has); fetches the SDK the first time |
-| `./run.sh` | runs the game in a window |
-| `./test.sh` | the button-prompt check, then the tests headless: the replay gate on GL and WebGPU, the menu gate, the screenshot test |
-| `./shot.sh [frames]` | writes `out/shot.png` after that many frames (default 300) of the autopilot playing |
-| `./programs.sh` | regenerates the program table after you add a material or light setup |
-| `./release.sh v0.1.0` | tags and pushes: CI builds, tests and publishes every platform |
-
-Needs git, cmake, ninja, curl, node and a C compiler; the scripts say what is
-missing.
-
-## The game's structure (`src/main.c`)
-
-- **setup**: `cw_main` returns the app description (`cw_scene_app` runs
-  `main.cwscene`); `init` loads the input map, calls `cw_shell_init`, makes
-  sounds and publishes the debug fields the tests read (`cw_debug_*`).
-- **start**: the shell's Play calls `start(players)`: reset the world for
-  that many players.
-- **fixed_update**: one simulation tick, 60 per second. It begins with
-  `if (!cw_shell_update()) return;` (a menu is up). Then gameplay.
-- **render**: the HUD with `cw_r2d_*` in each player's
-  `cw_shell_player_rect` (scores, and the controls as button prompts), then
-  `cw_shell_draw()`.
-- **actions input**: gameplay reads actions (`cw_action_*`, `cw_input_axis`)
-  for players 0..n-1; the actions are the `input.*` lines in `project.cwproj`
-  (pad, keyboard, touch). The shell assigns each joined player its pad.
-- **physics**: `CharacterBody3D` players moved with
-  `cw_character3d_move_and_slide`, `Area3D` gems with a `body_entered`
-  signal, `StaticBody3D` level pieces (`cartwheel/physics_nodes.h`).
-- **HUD**: text and rects in render; with three players
-  `cw_shell_shared_rect` is the free quadrant.
-- **audio**: play music on `cw_shell_music_bus()` and effects on
-  `cw_shell_sfx_bus()`; the shell's `sound` and `screen_changed` hooks play
-  the menu sounds and music.
-- **saves**: `cw_shell_game_save()` is your save struct; write it and call
-  `cw_shell_save_commit()`.
-- **graphics**: Settings > Graphics opens the engine's graphics page
-  (`cartwheel/quality_menu.h`): a preset or Auto, and each setting on its own
-  (render resolution, ambient occlusion, shadows, anti-aliasing, effects
-  detail). Add a setting of the game's own with `cw_quality_lever_add` in
-  `init` and apply it from `cw_quality_on_change`; thin instanced scenery by
-  `cw_quality_density()`. All of it is render-only and saved by the shell.
-
-`gemdash_auto` (CMakeLists.txt) is the same game with `GEMDASH_AUTOPILOT`:
-bots play a two-player match with no input. The tests and screenshots run it.
-Keep an autopilot that exercises your gameplay.
-
-## Checking your work
-
-1. `./build.sh`: no warnings.
-2. `./test.sh`: every gate ok. When your change alters the game on purpose,
-   the replay gate's expected values in `tests/gates.json` change: update
-   them from `out/test/match-gl.json`, and check GL and WebGPU still agree.
-3. `./shot.sh` and look at `out/shot.png` (and `out/test/*.png`). A test
-   that passes on a black or broken frame is not done.
-
-## Rules that bite
-
-- **Button prompts.** Never write a button's name or colour in text or art:
-  "A: jump" is the wrong button on another maker's pad and means nothing on
-  a keyboard or a phone. Name the action and let the engine draw it for the
-  device each player holds (`cartwheel/prompt.h`):
-  `cw_prompt_text(font, "{jump}: hop a gap", player, pos, size, color, align)`.
-  `{move_left|move_right}` (or four directions) draws one stick or d-pad
-  glyph; `{pad:west}` draws one button when the design is about position
-  (lanes, answer slots). Player `-1` is a screen every seat reads. The word
-  "Start" is fine. Colours belong to the game, not the controller: no
-  "press green". Never track the last device yourself:
-  `cw_prompt_device_of(player)`. Count on four face buttons, a d-pad, two
-  shoulders, Start and Back; sticks and analog triggers may be missing, so
-  anything the game needs also binds to a button or the d-pad. `./test.sh`
-  runs `tools/check-prompts.mjs` from the SDK, which fails on `A:`, `(A)`,
-  `press A`, `LB`, `RT`, `Cross` and the like; a line that really means it
-  carries `prompt-ok: <reason>`. It cannot see letters drawn in art: never
-  draw one.
-- **Determinism.** The simulation runs only in `fixed_update`, from the input
-  snapshot and `cw_rng`. Never read the wall clock in the simulation. One
-  `cw_rng_*` call per statement (C leaves the order of calls in one
-  expression unspecified, so two calls in one expression can differ between
-  compilers). No `-ffast-math`. The tests hold GL, WebGPU and every platform
-  to the same state.
-- **Keep frame CPU low.** Work per frame should scale with what is on screen;
-  no per-frame allocation in hot loops; use instancing for many copies.
-- **three.js r187.** The renderer is three.c, the three.js r187 API in C:
-  materials, lights and cameras behave as in three.js r187. A new material
-  or light setup needs `./programs.sh`; the tests name missing states.
-- **No hardcoded paths.** Assets go through `roots.txt` and asset paths;
-  never absolute paths or anything outside the repository.
-
-## Engine reference
-
-The engine headers are the API reference, for the version pinned in
-`scripts/deps.lock` (v0.30.0):
-<https://github.com/monteslu/cartwheel-engine/tree/v0.30.0/include/cartwheel>,
-guides in <https://github.com/monteslu/cartwheel-engine/tree/v0.30.0/docs/guides>
-(`game-shell.md`, `input.md`, `physics.md`, `rendering-3d.md`), and shipping
-in <https://github.com/monteslu/cartwheel-engine/blob/v0.30.0/docs/shipping.md>.
-The same headers are in `deps/cartwheel-sdk/<platform>/include/cartwheel/`
-after the first build.
+`./release.sh v0.1.0` tags and pushes; CI builds every platform and publishes
+the GitHub release. Bump `version` in `project.cwproj` first.

@@ -1,8 +1,10 @@
 name: CI
 
-# Every push: build and test the game on Linux, macOS and Windows, and
-# package it for every platform. A v* tag (./release.sh v0.1.0) also
-# publishes the packages as a GitHub release.
+# Every push: build the game on Linux and macOS, run the checks that need no
+# GPU (the prompt check), and package it for every platform. The checks that
+# run the cart (./test.sh: newcomer, grounding, flash, text, quality) need the
+# romdev server and a GPU: run them before you push. A v* tag
+# (./release.sh v0.1.0) also publishes the packages as a GitHub release.
 on:
   push:
     branches: [main]
@@ -26,10 +28,8 @@ jobs:
         include:
           - { target: linux-x64, os: ubuntu-24.04, test: true }
           - { target: linux-arm64, os: ubuntu-24.04-arm, test: true }
-          # macOS runners draw GL (ANGLE) at about a second a frame: the full
-          # replay there runs on WebGPU (Metal), GL gets the short menus gate
-          - { target: macos-arm64, os: macos-15, test: true, test_args: '--gpu webgpu', gl_check: true }
-          - { target: windows-x64, os: ubuntu-24.04, test: false } # tested on Windows below
+          - { target: macos-arm64, os: macos-15, test: true }
+          - { target: windows-x64, os: ubuntu-24.04, test: false } # its runtime DLLs are added on Windows below
           - { target: android-arm64, os: ubuntu-24.04, test: false } # launched on an emulator below
           - { target: wasc, os: ubuntu-24.04, test: false } # the one cart: GL and WebGPU in one .wasc
     steps:
@@ -58,36 +58,13 @@ jobs:
       - name: Build
         if: matrix.test
         run: ./build.sh
-      - name: Test
+      - name: Checks that need no GPU (the prompt check and its control)
         if: matrix.test
-        run: ./test.sh ${{ matrix.test_args }}
-      - name: Test (GL, the menus gate)
-        if: matrix.gl_check
-        run: node tests/run.mjs menus --gpu gl
-      - name: Screenshot
-        if: matrix.test
-        run: ./shot.sh
-      - uses: actions/upload-artifact@v7
-        if: matrix.test && always()
-        with:
-          name: shot-${{ matrix.target }}
-          path: out/
-          retention-days: 14
+        run: ./test.sh prompts
       - name: Package
         run: |
           if [ "$GITHUB_REF_TYPE" = tag ]; then v="${GITHUB_REF_NAME#v}"; else v="0.0.0-${GITHUB_SHA::7}"; fi
           scripts/package.sh ${{ matrix.target }} "$v"
-      - name: Test bundle (for the Windows runner)
-        if: matrix.target == 'windows-x64'
-        run: |
-          mkdir -p out/bundle/build/native
-          cp build/windows-x64/gemdash_auto.exe build/windows-x64/gemdash_auto.cwpak build/windows-x64/*.dll out/bundle/build/native/
-      - uses: actions/upload-artifact@v7
-        if: matrix.target == 'windows-x64'
-        with:
-          name: test-bundle-windows-x64
-          path: out/bundle/
-          retention-days: 7
       - uses: actions/upload-artifact@v7
         with:
           name: release-${{ matrix.target }}
@@ -96,44 +73,27 @@ jobs:
           retention-days: 30
 
   windows:
-    name: windows-x64 (run)
+    name: windows-x64 (runtime DLLs)
     needs: build
     runs-on: windows-2022
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-      - uses: actions/download-artifact@v8
-        with:
-          name: test-bundle-windows-x64
-          path: .
       - uses: actions/download-artifact@v8
         with:
           name: release-windows-x64
           path: packages
-      - name: Microsoft's Visual C++ runtime, which Dawn links, into the bundle and the package
+      - name: Microsoft's Visual C++ runtime, which Dawn links, into the package
         shell: pwsh
         run: |
           $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
           $crt = (Get-ChildItem "$vs\VC\Redist\MSVC\*\x64\Microsoft.VC143.CRT" -Directory | Sort-Object FullName | Select-Object -Last 1).FullName
           $dlls = 'msvcp140.dll','msvcp140_atomic_wait.dll','vcruntime140.dll','vcruntime140_1.dll'
-          foreach ($d in $dlls) { Copy-Item "$crt\$d" build\native\ }
           foreach ($z in Get-ChildItem packages\*.zip) {
             $top = $z.BaseName
             New-Item -ItemType Directory -Force "stage\$top" | Out-Null
             foreach ($d in $dlls) { Copy-Item "$crt\$d" "stage\$top\" }
             Push-Location stage; 7z a -tzip $z.FullName "$top\*.dll" | Out-Null; Pop-Location
           }
-      - name: Test (GL on ANGLE / Direct3D 11, WebGPU on Dawn / Direct3D 12)
-        run: node tests/run.mjs match screenshot
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: shot-windows-x64
-          path: out/
-          retention-days: 14
       - uses: actions/upload-artifact@v7
         with:
           name: release-windows-x64-final
@@ -146,6 +106,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
           name: release-android-arm64
@@ -163,7 +124,7 @@ jobs:
           target: google_apis
           emulator-options: -no-window -no-snapshot -no-audio -no-boot-anim -gpu swiftshader_indirect
           script: |
-            adb install -r apk/*.apk && adb logcat -c && adb shell monkey -p org.cartwheel.gemdash -c android.intent.category.LAUNCHER 1 && sleep 25 && adb logcat -d -s cartwheel:* | grep -E 'WebGPU|GL:' ; adb shell pidof org.cartwheel.gemdash || (adb logcat -d | tail -60; exit 1)
+            id=$(sed -n 's/^app_id *= *//p' project.cwproj) && adb install -r apk/*.apk && adb logcat -c && adb shell monkey -p "$id" -c android.intent.category.LAUNCHER 1 && sleep 25 && adb logcat -d -s cartwheel:* | grep -E 'WebGPU|GL:' ; adb shell pidof "$id" || (adb logcat -d | tail -60; exit 1)
 
   release:
     name: Release

@@ -1,0 +1,13 @@
+{
+  "note": "Every screen the player reads, for the engine's text-size check (tools/check-text.mjs, run by ./test.sh text): each run ends on that screen. Input scripts are in tests/input/.",
+  "app": "lanterntrail",
+  "screens": [
+    { "name": "title", "frames": 120 },
+    { "name": "join", "frames": 170, "input": "input/join.json" },
+    { "name": "play", "app": "lanterntrail_auto", "frames": 300 },
+    { "name": "finished", "app": "lanterntrail_auto", "frames": 660 },
+    { "name": "pause", "app": "lanterntrail_auto", "frames": 240, "input": "input/pause.json" },
+    { "name": "settings", "app": "lanterntrail_auto", "frames": 300, "input": "input/settings.json" },
+    { "name": "graphics", "app": "lanterntrail_auto", "frames": 200, "startCmds": ["quality_menu 1"] }
+  ]
+}

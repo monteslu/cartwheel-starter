@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
-# A screenshot of the game after [frames] frames (default 300) of the
-# autopilot playing: out/shot.png. Look at it.
+# Screenshots of the game from the player's camera, through romdev: the
+# autopilot cart at Very Low and High, on GL and WebGPU, at the frames given
+# (default 150 420 700), and a contact sheet of them: out/shots/sheet.png.
+# Look at them. ./build.sh first; the romdev server running (npx romdevtools).
 . "$(dirname "$0")/scripts/lib.sh"
-exe="$ROOT/build/native/gemdash_auto"
-[ -x "$exe" ] || { echo "no $exe: run ./build.sh first" >&2; exit 1; }
-mkdir -p "$ROOT/out"
-CW_FRAMES="${1:-300}" CW_WARMUP_SPREAD=0 SDL_AUDIODRIVER=dummy CW_SCREENSHOT="$ROOT/out/shot.png" "$exe" 2>"$ROOT/out/shot.log" ||
-  { tail -20 "$ROOT/out/shot.log" >&2; exit 1; }
-echo "$ROOT/out/shot.png"
+exec node "$ROOT/tests/shots.mjs" "$@"

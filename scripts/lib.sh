@@ -72,3 +72,7 @@ configure() {
   cmake -S "$ROOT" -B "$ROOT/build/$tree" -G Ninja -DCMAKE_BUILD_TYPE=Release \
     -Dcartwheel_DIR="$s/lib/cmake/cartwheel" "$@" >/dev/null
 }
+
+# the game's name (`app` in project.cwproj): the executable, the cart, the packages
+APP="$(sed -n 's/^app *= *"\{0,1\}\([A-Za-z_][A-Za-z0-9_]*\).*/\1/p' "$ROOT/project.cwproj" | head -1)"
+[ -n "$APP" ] || { echo "project.cwproj: set app = <name> (a C identifier)" >&2; exit 1; }

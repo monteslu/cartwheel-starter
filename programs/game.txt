@@ -1,0 +1,9 @@
+# r187 program states the game draws (cmake/programs.cmake, tools/programs.mjs): ./programs.sh fills it
+depth+xcsm
+standard+senv+l0401+xcsm
+physical+senv+cc+l0401+xcsm
+physical+senv+sheen+l0401+xcsm
+depth+xcsm_plain
+standard+senv+l0401+xcsm_plain
+physical+senv+cc+l0401+xcsm_plain
+physical+senv+sheen+l0401+xcsm_plain

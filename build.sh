@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Build the game for this machine (build/native/gemdash) and as a cart
-# (build/cart-wgpu/carts/gemdash.wasc: one .wasc that draws with GL or
+# Build the game for this machine (build/native/$APP) and as a cart
+# (build/cart-wgpu/carts/$APP.wasc: one .wasc that draws with GL or
 # WebGPU, whichever the host has). The first run fetches the engine SDK.
 #   RELEASE=1 ./build.sh   the cart as releases ship it (slower link, smaller and faster cart)
 . "$(dirname "$0")/scripts/lib.sh"
@@ -14,7 +14,7 @@ if [ "$host" = linux-x64 ]; then # the cart toolchain (wasi-sdk) runs on Linux x
   configure cart-wgpu "$cart" -DCMAKE_TOOLCHAIN_FILE="$cart/cmake/cart.cmake" -DCW_CWPACK="$native/bin/cwpack" \
     -DCW_CART_DEV=$([ -n "${RELEASE:-}" ] && echo OFF || echo ON)
   ninja -C "$ROOT/build/cart-wgpu"
-  echo "built build/native/gemdash and build/cart-wgpu/carts/gemdash.wasc"
+  echo "built build/native/$APP and build/cart-wgpu/carts/$APP.wasc"
 else
-  echo "built build/native/gemdash (carts build on Linux x64; CI builds them on every push)"
+  echo "built build/native/$APP (carts build on Linux x64; CI builds them on every push)"
 fi

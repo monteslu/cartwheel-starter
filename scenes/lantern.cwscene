@@ -1,0 +1,43 @@
+[scene format=1]
+
+[node name="Lantern" type="Area3D" groups="lanterns"]
+collision_layer_name = "pickups"
+collision_mask_names = "player"
+
+[node name="Shape" parent="." type="CollisionShape3D"]
+shape = SPHERE
+position = vec3(0, 0.3, 0)
+radius = 0.9
+
+[node name="Base" parent="." type="MeshInstance3D"]
+position = vec3(0, 0.04, 0)
+size = vec3(0.34, 0.08, 0.34)
+color = color(0.16, 0.13, 0.1, 1)
+metalness = 1
+roughness = 0.35
+cast_shadow = true
+receive_shadow = true
+
+[node name="Glass" parent="." type="MeshInstance3D"]
+primitive = CYLINDER
+position = vec3(0, 0.26, 0)
+size = vec3(0.24, 0.36, 0.24)
+color = color(1, 0.75, 0.4, 1)
+emissive = color(3.2, 1.7, 0.55, 1)
+roughness = 0.2
+
+[node name="Cap" parent="." type="MeshInstance3D"]
+primitive = CYLINDER
+position = vec3(0, 0.48, 0)
+size = vec3(0.3, 0.08, 0.3)
+color = color(0.16, 0.13, 0.1, 1)
+metalness = 1
+roughness = 0.35
+cast_shadow = true
+receive_shadow = true
+
+[node name="Glow" parent="." type="OmniLight3D"]
+position = vec3(0, 0.3, 0)
+color = color(1, 0.7, 0.4, 1)
+energy = 6
+range = 6

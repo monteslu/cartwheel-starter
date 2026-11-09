@@ -1,0 +1,141 @@
+[scene format=1]
+
+[node name="Player" type="CharacterBody3D" groups="players"]
+collision_layer_name = "player"
+collision_mask_names = "world|pickups|props"
+floor_snap_length = 0.3
+push_mass = 60
+
+[node name="Shape" parent="." type="CollisionShape3D"]
+shape = CAPSULE
+radius = 0.3
+height = 1.75
+
+[node name="Rig" parent="." type="Node3D"]
+
+[node name="HipL" parent="Rig" type="Node3D"]
+position = vec3(-0.1, 0.0, 0)
+
+[node name="Leg" parent="Rig/HipL" type="MeshInstance3D"]
+primitive = CYLINDER
+position = vec3(0, -0.41, 0)
+size = vec3(0.15, 0.82, 0.15)
+color = color(0.06, 0.09, 0.16, 1)
+roughness = 0.95
+cast_shadow = true
+receive_shadow = true
+
+[node name="Shoe" parent="Rig/HipL" type="MeshInstance3D"]
+position = vec3(0, -0.835, -0.04)
+size = vec3(0.13, 0.08, 0.27)
+color = color(0.03, 0.03, 0.03, 1)
+roughness = 0.6
+cast_shadow = true
+receive_shadow = true
+
+[node name="HipR" parent="Rig" type="Node3D"]
+position = vec3(0.1, 0.0, 0)
+
+[node name="Leg" parent="Rig/HipR" type="MeshInstance3D"]
+primitive = CYLINDER
+position = vec3(0, -0.41, 0)
+size = vec3(0.15, 0.82, 0.15)
+color = color(0.06, 0.09, 0.16, 1)
+roughness = 0.95
+cast_shadow = true
+receive_shadow = true
+
+[node name="Shoe" parent="Rig/HipR" type="MeshInstance3D"]
+position = vec3(0, -0.835, -0.04)
+size = vec3(0.13, 0.08, 0.27)
+color = color(0.03, 0.03, 0.03, 1)
+roughness = 0.6
+cast_shadow = true
+receive_shadow = true
+
+[node name="Hips" parent="Rig" type="MeshInstance3D"]
+position = vec3(0, -0.02, 0)
+size = vec3(0.34, 0.16, 0.2)
+color = color(0.06, 0.09, 0.16, 1)
+roughness = 0.95
+cast_shadow = true
+receive_shadow = true
+
+[node name="Torso" parent="Rig" type="MeshInstance3D"]
+position = vec3(0, 0.3, 0)
+size = vec3(0.44, 0.5, 0.24)
+color = color(0.45, 0.05, 0.035, 1)
+roughness = 0.92
+sheen = 0.5
+sheen_color = color(0.9, 0.5, 0.4, 1)
+cast_shadow = true
+receive_shadow = true
+
+[node name="Neck" parent="Rig" type="MeshInstance3D"]
+primitive = CYLINDER
+position = vec3(0, 0.59, 0)
+size = vec3(0.1, 0.1, 0.1)
+color = color(0.55, 0.36, 0.25, 1)
+roughness = 0.6
+cast_shadow = true
+receive_shadow = true
+
+[node name="Head" parent="Rig" type="MeshInstance3D"]
+primitive = SPHERE
+position = vec3(0, 0.745, 0)
+size = vec3(0.21, 0.25, 0.23)
+color = color(0.55, 0.36, 0.25, 1)
+roughness = 0.6
+cast_shadow = true
+receive_shadow = true
+
+[node name="Hair" parent="Rig" type="MeshInstance3D"]
+primitive = SPHERE
+position = vec3(0, 0.81, 0.015)
+size = vec3(0.225, 0.15, 0.24)
+color = color(0.08, 0.05, 0.03, 1)
+roughness = 0.85
+cast_shadow = true
+receive_shadow = true
+
+[node name="ShoulderL" parent="Rig" type="Node3D"]
+position = vec3(-0.29, 0.52, 0)
+
+[node name="Sleeve" parent="Rig/ShoulderL" type="MeshInstance3D"]
+primitive = CYLINDER
+position = vec3(0, -0.15, 0)
+size = vec3(0.12, 0.3, 0.12)
+color = color(0.45, 0.05, 0.035, 1)
+roughness = 0.92
+cast_shadow = true
+receive_shadow = true
+
+[node name="Forearm" parent="Rig/ShoulderL" type="MeshInstance3D"]
+primitive = CYLINDER
+position = vec3(0, -0.45, 0)
+size = vec3(0.095, 0.3, 0.095)
+color = color(0.55, 0.36, 0.25, 1)
+roughness = 0.6
+cast_shadow = true
+receive_shadow = true
+
+[node name="ShoulderR" parent="Rig" type="Node3D"]
+position = vec3(0.29, 0.52, 0)
+
+[node name="Sleeve" parent="Rig/ShoulderR" type="MeshInstance3D"]
+primitive = CYLINDER
+position = vec3(0, -0.15, 0)
+size = vec3(0.12, 0.3, 0.12)
+color = color(0.45, 0.05, 0.035, 1)
+roughness = 0.92
+cast_shadow = true
+receive_shadow = true
+
+[node name="Forearm" parent="Rig/ShoulderR" type="MeshInstance3D"]
+primitive = CYLINDER
+position = vec3(0, -0.45, 0)
+size = vec3(0.095, 0.3, 0.095)
+color = color(0.55, 0.36, 0.25, 1)
+roughness = 0.6
+cast_shadow = true
+receive_shadow = true
