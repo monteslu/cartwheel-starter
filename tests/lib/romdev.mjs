@@ -45,7 +45,7 @@ export class Romdev {
       throw new Error(`romdev request budget passed: ${b.calls} requests by frame ${this.frame} (at most ${BUDGET.base} + ${BUDGET.perSecond} a second of game time). Send ranges: one input sequence or frame step for many frames, then read once.`);
     let res;
     try {
-      res = await fetch(`${URL_BASE}/tool/${tool}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-romdev-session': this.session }, body: JSON.stringify(args) });
+      res = await fetch(`${URL_BASE}/tool/${tool}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-romdev-session': this.session, ...(process.env.ROMDEV_AGENT ? { 'x-romdev-agent': process.env.ROMDEV_AGENT } : {}) }, body: JSON.stringify(args) });
     } catch (e) {
       throw new Error(`romdev is not running at ${URL_BASE} (${e.cause?.code || e.message}): start it (npx romdevtools, see AGENTS.md)`);
     }
@@ -56,12 +56,14 @@ export class Romdev {
     return body;
   }
 
-  /** load a cart deterministically on 'gl' or 'webgpu'; frame 1 has run when this returns */
+  /** load a cart deterministically on 'gl' or 'webgpu'; frame 1 has run when this returns. seed: null loads it as a
+   * player's host runs it: no seed, so its warm-up spreads over frames under the loading screen and Auto picks the
+   * graphics (frames that are not reproducible: for checks that look for what a player can meet, not for hashes) */
   static async load({ cart, gpu = 'gl', seed = 1, label = 'check' }) {
     if (!existsSync(cart)) throw new Error(`no cart ${cart}: run ./build.sh first`);
     const r = new Romdev(`${label}-${gpu}-${process.pid}-${++seq}`);
     const pin = testGpu();
-    const args = { platform: 'wasmcart', path: cart, deterministicSeed: seed, wgpu: gpu === 'webgpu' };
+    const args = { platform: 'wasmcart', path: cart, wgpu: gpu === 'webgpu', ...(seed === null ? {} : { deterministicSeed: seed }) };
     if (pin) args.gpuPower = pin.power;
     const l = await r.call('loadMedia', args);
     const got = l.gpu === 'webgpu' ? 'webgpu' : 'gl';

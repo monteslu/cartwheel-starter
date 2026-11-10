@@ -24,6 +24,28 @@ replaced. This file is the playbook: read it all before writing code.
 3. `src/main.c`: the whole sample in one readable file. Its header comment is
    the map of a cartwheel game.
 
+## The bar: what makes it a game
+
+The template and the checks give you a floor (it builds, a newcomer can
+finish, nothing floats or strobes, text is readable). They do not make a
+game. Spend your time on what does, whatever the genre:
+
+- **Something to come back to for 10 minutes or more.** Several levels, or
+  one loop that escalates (new enemies, faster, harder layouts, a boss),
+  with a clear start and a clear end. One level of a minute is a demo.
+- **Replay value.** A score, a best time, unlocks, choices, or variety from
+  run to run; a reason to press Play again on the finish screen.
+- **A title screen with art.** The shell draws the title and menus; behind
+  them show the game itself (keep the level rendering under the title with a
+  slow camera over it) or a key-art picture
+  (`cw_shell_desc.draw_background`), never a bare dark screen.
+- **Feel.** Responsive controls, sound for every action, effects that swell
+  and fade, a camera that frames the action.
+
+The pipeline is there to protect that work, not to be the work. Use the
+template's tools as they are; the time you save goes into levels, enemies,
+mechanics and art.
+
 The engine's headers are its API reference, for the version pinned in
 `scripts/deps.lock`: `deps/cartwheel-sdk/<platform>/include/cartwheel/` after
 the first build, and the guides at
@@ -50,16 +72,33 @@ no MCP client. `<app>` is `app` in `project.cwproj`.
 
 | Step | Command | What it does |
 |---|---|---|
-| build | `./build.sh` | the native game and the cart; no warnings allowed |
+| build | `./build.sh` | the native game and the cart; no warnings allowed (`./test.sh`, `./shot.sh` and `./programs.sh` build first themselves) |
 | look | `./shot.sh [frames...]` | the autopilot cart in romdev at Very Low and High, on GL and WebGPU: `out/shots/*.png` and a sheet `out/shots/sheet.png` |
-| check | `./test.sh [--gpu gl\|webgpu] [check ...]` | every check below, through romdev, each with its control |
+| check | `./test.sh [--gpu gl\|webgpu] [check ...]` | builds, then every check below through romdev, each with its control (GL and WebGPU legs at once); the output is also in `out/test.log` |
 | play | `./run.sh` | the game in a window (for a human; agents look through `./shot.sh`) |
-| one check | `./test.sh newcomer` (or prompts, grounding, gates, text, budget) | while you work on one thing; the whole `./test.sh` before you call it done |
-| tables | `./programs.sh`, then `./build.sh` | after a new material, light setup or effect: the game shows a red "no program" banner until you do |
+| one check | `./test.sh --gpu gl newcomer` (or prompts, programs, grounding, gates, text, budget) | while you work on one thing; the whole `./test.sh` before you call it done |
+| tables | `./programs.sh` | when `./test.sh programs` fails (a new material, light setup, scenery or effect): surveys the carts, regenerates `programs/` and builds it in. Otherwise the game shows a red "no program" banner and leaves those draws out |
 
 Work in small steps. After each one: build, look, check. A change is done
 when `./test.sh` is green on GL and WebGPU **and** you have looked at the
 screenshots and they show what you meant.
+
+### Spend the time on the game
+
+A fresh agent's session once spent four fifths of its time waiting on checks
+and regenerating tables, and shipped one level of a minute. Do this instead:
+
+- While you build content, look with `./shot.sh` and run the one check the
+  change touches on GL only (`./test.sh --gpu gl newcomer`). Run the whole
+  `./test.sh` when a feature is done and once at the end, not after every
+  edit.
+- A long command (the whole `./test.sh`, `./programs.sh`) goes in the
+  background while you keep working on content; read `out/test.log` when it
+  ends. Do not sit in sleep or polling loops waiting for it.
+- Run `./test.sh programs` after art or lighting changes; only when it fails,
+  `./programs.sh` (once, at the end of an art pass, not after each change).
+- Never rerun a check to see whether a failure goes away: read its output
+  (and `out/newcomer/*.json`), fix the cause, then rerun that one check.
 
 ### How to see the game
 
@@ -148,6 +187,7 @@ could not tell good from bad.
 | Check | File | Its control |
 |---|---|---|
 | prompts | the SDK's `tools/check-prompts.mjs` over `src/` and the scenes | `tests/fixtures/prompt-control.c`, which names a button |
+| programs | `tests/programs.mjs`: the autopilot cart's whole run at every preset, and the autopilot and the game through its menus as a player's machine runs them (no seed: the loading screen's warm-up, Auto graphics); fails on any draw state the program table lacks (the red banner) and names them | a sphere put in front of the camera in a material no table has |
 | newcomer | `tests/newcomer.mjs` | the same bot ignoring the cues |
 | grounding | `tests/grounding.mjs` | one standing thing lifted 0.5 m |
 | gates | the engine's `tests/gate.mjs --hosts romdev` over `tests/gates.json`: the autopilot finishes the trail and the menus reach play, the same state on GL and WebGPU, a real picture, the text floor, no missing program state | each run one frame short |
@@ -178,6 +218,8 @@ What a new game fills in, in `tests/game.json`:
 - `newcomer.press`: debug fields that are 1 while a button prompt shows, and
   the pad button that prompt's action is bound to.
 - `newcomer.players`: more than 1 adds the idle-second-seat run.
+- `autopilot.frames`: the frames the autopilot cart takes to finish its
+  run (the programs check and `./programs.sh` play it to the end).
 - `grounding.frames`: frames of the autopilot cart when nothing should be in
   the air.
 - `flash.effects`: the game's flash meters; `flash.run`: frames and debug
@@ -223,15 +265,15 @@ Keep `./test.sh` green after every step.
 8. **The autopilot.** `<app>_auto` (`GAME_AUTOPILOT`) plays the game from its
    own cues, straight into play. Keep it playing your game: `./shot.sh` and
    the grounding, flash and quality checks run it.
-9. **Materials and lights changed?** `./programs.sh`, then `./build.sh`.
+9. **Materials and lights changed?** `./test.sh programs`; when it fails, `./programs.sh`.
 10. **Look** (`./shot.sh`) and **check** (`./test.sh`). Then the next step.
 
 ## 6. Art: `tools/make-art.mjs`
 
 Every texture and model is made by `tools/make-art.mjs` (plain Node, no
 dependencies, nothing downloaded) into `textures/` and `models/`. Run it after
-changing the level, then `./build.sh` (and `./programs.sh` when a new kind of
-material appears).
+changing the level, then `./build.sh` (and `./test.sh programs`, then
+`./programs.sh` if it fails, when a new kind of material appears).
 
 - **The level's blocks are their collision boxes** in `main.cwscene`. The
   script reads every StaticBody3D in a `dress_*` group and builds its look into

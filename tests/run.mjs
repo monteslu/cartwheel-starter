@@ -1,8 +1,9 @@
 // ./test.sh: every check, in order, each with its control. Prints one line per result; exit 1 when any failed.
 //
 //   node tests/run.mjs [check ...] [--gpu gl|webgpu]
-// Checks: prompts (no GPU); budget, grounding, flash, newcomer, gates, text (the cart through romdev, on GL and WebGPU).
-import { spawnSync } from 'node:child_process';
+// Checks: prompts (no GPU); budget, programs, grounding, flash, newcomer, gates, text (the cart through romdev, on GL
+// and WebGPU). A check's GL and WebGPU legs run at the same time (two romdev hosts), its lines printed leg by leg.
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,6 +17,19 @@ const env = { ...process.env, CW_PROJECT_ROOT: ROOT }; // the engine's tools run
 const node = (args) => spawnSync('node', args, { cwd: ROOT, stdio: 'inherit', env }).status;
 const quiet = (args) => spawnSync('node', args, { cwd: ROOT, encoding: 'utf8', env });
 const gpus = gpuArgs.length ? [gpuArgs[1]] : ['gl', 'webgpu'];
+/** a check script once per GPU, the legs at once; its output leg by leg; 0 when every leg passed */
+async function legs(script, extra = []) {
+  const one = (gpu) => new Promise((res) => {
+    const p = spawn('node', [script, ...extra, '--gpu', gpu], { cwd: ROOT, env });
+    let out = '';
+    p.stdout.on('data', (d) => (out += d));
+    p.stderr.on('data', (d) => (out += d));
+    p.on('close', (code) => res({ code, out }));
+  });
+  const got = await Promise.all(gpus.map(one));
+  for (const g of got) process.stdout.write(g.out);
+  return got.every((g) => g.code === 0) ? 0 : 1;
+}
 
 const CHECKS = {
   // the SDK's prompt check over the game's sources and scenes; its control is a file that names a button
@@ -28,9 +42,11 @@ const CHECKS = {
     return run;
   },
   budget: () => node(['tests/budget.mjs']),
-  grounding: () => node(['tests/grounding.mjs', ...gpuArgs]),
-  flash: () => node(['tests/flash.mjs', ...gpuArgs]),
-  newcomer: () => node(['tests/newcomer.mjs', ...gpuArgs]),
+  // every state the game draws has a program (no red banner, nothing left out): every preset and a player's first frames
+  programs: () => legs('tests/programs.mjs'),
+  grounding: () => legs('tests/grounding.mjs'),
+  flash: () => legs('tests/flash.mjs'),
+  newcomer: () => legs('tests/newcomer.mjs'),
   // the engine's gate runner, romdev alone: GL the reference, the WebGPU leg against it, a control per leg
   gates: () => node([join(sdkTools(ROOT), '..', 'tests', 'gate.mjs'), '--hosts', 'romdev', '--gpu', gpus.length > 1 ? 'both' : gpus[0]]),
   // the engine's text size check over every screen, and its control: the same screens at half the text size
@@ -62,7 +78,7 @@ let failed = [];
 for (const [name, run] of Object.entries(CHECKS)) {
   if (names.length && !names.includes(name)) continue;
   console.log(`== ${name}`);
-  if (run() !== 0) failed.push(name);
+  if ((await run()) !== 0) failed.push(name);
 }
 console.log(failed.length ? `FAILED: ${failed.join(', ')}` : 'all checks ok');
 process.exit(failed.length ? 1 : 0);

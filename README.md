@@ -33,7 +33,7 @@ controls) and saves.
 nohup npx romdevtools > romdev.log 2>&1 &   # the romdev server every run and check goes through (Node 24+; leave it running)
 ./build.sh          # the game for this machine and the .wasc cart (fetches the engine SDK the first time)
 ./shot.sh           # screenshots of the game from the player's camera, through romdev: out/shots/
-./test.sh           # every check, through romdev, on GL and WebGPU
+./test.sh           # builds, then every check through romdev, on GL and WebGPU (out/test.log)
 ./run.sh            # play it in a window
 ```
 
@@ -65,6 +65,7 @@ on-screen cues).
 | Check | Passes when | Its control (must fail) |
 |---|---|---|
 | prompts | no text names a button ("A: jump"); prompts name actions | a line that names a button |
+| programs | the program table has every draw state the game asks for (no red "no program" banner, nothing left out) at every preset and in a player's first frames; `./programs.sh` fixes it | a sphere in a material no table has |
 | newcomer | a bot that knows only the on-screen cues, reacts late and aims badly finishes level 1, alone and with an idle second seat | the same bot ignoring the cues |
 | grounding | nothing in the level floats | one thing lifted half a metre |
 | flash | every effect's flash meter reads at most 3 flashes a second (WCAG 2.3.1, Harding) | every effect strobing |
@@ -100,7 +101,7 @@ Signing for stores: the engine's
 `scripts/deps.lock` pins an engine release and the sha256 of each SDK. A
 published SDK never changes, so a pinned version builds the same forever. To
 move to a newer engine, replace those lines with the newer release's (its
-release page lists each SDK's `.sha256`) then run `./programs.sh` and `./test.sh`.
+release page lists each SDK's `.sha256`) then run `./test.sh` (and `./programs.sh` if its programs check fails).
 
 ## License
 

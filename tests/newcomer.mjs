@@ -11,6 +11,8 @@
 //   - in a game for more than one player it also plays with a second seat joined that never touches its pad (a
 //     friend who joined and put the pad down): the level must still be finishable.
 // It passes when the goal field (game.json newcomer.goal) is reached within maxSeconds of play, on every run.
+// The control plays twice as long as the slowest passing run took (at least 20 s, at most maxSeconds): a player who
+// cannot read the cues and has not finished by then shows the cues matter, and the check spends no minutes more on it.
 //
 // The CONTROL must fail: the same bot ignoring the cues (it holds forward and presses every button cue on a timer,
 // as a player who cannot read the screen would). A control that finishes means the level finishes itself, or the
@@ -67,13 +69,13 @@ async function enterPlay(r, seats) {
 }
 
 /** one playthrough; `blind` is the control (cues ignored) */
-async function play(gpu, seats, seed, blind) {
+async function play(gpu, seats, seed, blind, seconds = null) {
   const r = await Romdev.load({ cart, gpu, label: 'newcomer' });
   const rand = rng(seed);
   const log = [];
   try {
     const start = await enterPlay(r, seats);
-    const maxSeconds = +opt('seconds', CFG.maxSeconds || 120), t0 = r.frame, limit = t0 + Math.round(maxSeconds * 60);
+    const maxSeconds = seconds ?? +opt('seconds', CFG.maxSeconds || 120), t0 = r.frame, limit = t0 + Math.round(maxSeconds * 60);
     if (start['shell.players'] !== undefined && start['shell.players'] !== seats)
       throw new Error(`newcomer: ${start['shell.players']} player(s) in play, wanted ${seats}`);
     let f = start, heading = null, pressLeft = 0, pressButtons = [];
@@ -119,18 +121,20 @@ let failed = 0;
 const seats = CFG.players > 1 ? [1, 2] : [1];
 const runs = +opt('runs', CFG.runs || 1), seed0 = +opt('seed', 1);
 for (const gpu of GPUS) {
+  let slowest = 0;
   for (const n of seats) {
     for (let k = 0; k < runs; k++) {
       const seed = seed0 + k + (n - 1) * 100;
       const tag = `newcomer (${gpu}, ${n === 1 ? 'one player' : `${n} seats, seat 2 idle`}, seed ${seed})`;
       const res = await play(gpu, n, seed, false);
       writeFileSync(join(OUT, `${gpu}-${n}p-${seed}.json`), JSON.stringify(res.log));
-      if (res.done) console.log(`ok   ${tag}: finished in ${res.secs} s (${res.requests} romdev requests)`);
+      if (res.done) { console.log(`ok   ${tag}: finished in ${res.secs} s (${res.requests} romdev requests)`); slowest = Math.max(slowest, +res.secs); }
       else { console.log(`FAIL ${tag}: not finished in ${res.secs} s (${JSON.stringify(res.fields)}); its trace: out/newcomer/${gpu}-${n}p-${seed}.json`); failed++; }
     }
   }
   if (!argv.includes('--no-control')) {
-    const res = await play(gpu, 1, seed0, true);
+    const cap = +opt('seconds', CFG.maxSeconds || 120);
+    const res = await play(gpu, 1, seed0, true, slowest ? Math.min(cap, Math.max(20, Math.ceil(slowest * 2))) : cap);
     if (res.done) { console.log(`FAIL newcomer control (${gpu}, cues ignored) finished in ${res.secs} s: the gate cannot tell a player who reads the cues from one who does not`); failed++; }
     else console.log(`ok   newcomer control (${gpu}, cues ignored): did not finish, as it must (${JSON.stringify(res.fields)}, ${res.requests} romdev requests)`);
   }

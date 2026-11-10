@@ -1,5 +1,9 @@
 {
   "note": "What the checks need to know about this game. A new game fills these in; the checks themselves stay as they are.",
+  "autopilot": {
+    "note": "The frames the autopilot cart (src/main.c GAME_AUTOPILOT) takes to finish its run: the programs check and ./programs.sh play it to the end.",
+    "frames": 700
+  },
   "newcomer": {
     "note": "Level 1's goal and the debug fields that hold the on-screen cues (src/main.c publishes them).",
     "players": 2,
