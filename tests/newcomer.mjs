@@ -4,7 +4,10 @@
 //   - it knows only the on-screen cues the game draws, read from the debug fields tests/game.json names (an arrow,
 //     a prompt): never positions, maps or the level's layout;
 //   - it looks at the screen about five times a second (human.lookEveryMs) and acts on what it saw a reaction time
-//     later (human.reactionMs); between looks it holds what it chose, and the frames run as one romdev request;
+//     later (human.reactionMs); between looks it holds what it chose, and the frames run as one romdev request that
+//     also returns the cues for the next look and stops the moment the goal is reached;
+//   - it plays on the keyboard (the game's key bindings: w a s d and space) or on a pad (the d-pad and its buttons):
+//     --input keys|pad, default both, each a run of its own, so both sets of bindings are checked;
 //   - it aims badly: a random error on every direction it reads (human.aimErrorDeg), then the nearest of the 8
 //     d-pad directions, as a thumb on a d-pad does;
 //   - it reaches play through the shell's menus with presses, as a player does;
@@ -18,9 +21,10 @@
 // as a player who cannot read the screen would). A control that finishes means the level finishes itself, or the
 // goal field cannot tell a finished run from an unfinished one, and the gate fails.
 //
-// romdev load: two requests a look (a ranged input sequence, then the fields): eight a second of play, ~250 for a 30 s level.
+// romdev load: one request a look (a ranged input sequence that returns the fields): four a second of play, ~130 for a
+// 30 s level.
 //
-//   node tests/newcomer.mjs [--gpu gl|webgpu] [--seed N] [--runs N] [--no-control]
+//   node tests/newcomer.mjs [--gpu gl|webgpu] [--input keys|pad] [--seed N] [--runs N] [--no-control]
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -30,6 +34,8 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const argv = process.argv.slice(2);
 const opt = (k, d) => (argv.includes('--' + k) ? argv[argv.indexOf('--' + k) + 1] : d);
 const GPUS = opt('gpu') ? [opt('gpu')] : ['gl', 'webgpu'];
+const INPUTS = opt('input') ? [opt('input')] : ['keys', 'pad'];
+if (INPUTS.some((i) => !['keys', 'pad'].includes(i))) { console.error('--input keys|pad'); process.exit(2); }
 const CFG = JSON.parse(readFileSync(join(ROOT, 'tests/game.json'), 'utf8')).newcomer;
 const { cart } = project(ROOT);
 const OUT = join(ROOT, 'out/newcomer');
@@ -50,31 +56,46 @@ const seat0 = (v) => (Array.isArray(v) ? v[0] : v);
 const vec0 = (v) => (Array.isArray(v) ? [v[0] || 0, v[1] || 0] : [0, 0]);
 const matches = (f, g) => ('equals' in g ? f[g.field] === g.equals : f[g.field] >= g.atLeast);
 const DPAD = [['up'], ['up', 'right'], ['right'], ['down', 'right'], ['down'], ['down', 'left'], ['left'], ['up', 'left']];
+// the keyboard's keys for the pad's buttons (project.cwproj input.*: w a s d move, space jumps; the shell accepts and
+// starts on return); the keyboard drives player 0 only, so seat 0 holds keys and the pads hold nothing
+const KEYS = { up: 'w', down: 's', left: 'a', right: 'd', south: 'space', start: 'return' };
+const seat0Input = (input, buttons) => (input === 'keys' ? { buttons: [], keys: buttons.map((b) => KEYS[b] || b) } : { buttons });
 
-/** reach play through the shell like a player: accept on the title, each seat joins with south, start plays */
-async function enterPlay(r, seats) {
+/** reach play through the shell like a player: accept on the title, each seat joins with south, start plays (on the
+ * keyboard: return accepts and starts; a pad joins the second seat). One request a step: the tap and the next look. */
+async function enterPlay(r, seats, input) {
   const idle = () => Array.from({ length: seats }, () => ({ buttons: [] }));
-  const tap = async (pad, button) => { const p = idle(); p[pad] = { buttons: [button] }; await r.run([{ pads: p, frames: 6 }, { pads: idle(), frames: 24 }]); };
+  const look = ['shell.screen', 'shell.players'];
+  const tap = async (pad, button) => {
+    const p = idle(); const seg = pad === 0 ? seat0Input(input, [button]) : { buttons: [button] };
+    p[pad] = { buttons: seg.buttons };
+    return (await r.run([{ pads: p, keys: seg.keys, frames: 6 }, { pads: idle(), frames: 24 }], { fields: look })).fields;
+  };
   let joined = 0;
+  let f = (await r.run([{ pads: idle(), frames: 1 }], { fields: look })).fields;
   for (let tries = 0; tries < 20; tries++) {
-    const f = await r.fields();
     const screen = f['shell.screen'];
     if (screen === (CFG.playScreen ?? 3)) return f;
-    if (screen === 1) await tap(0, 'south'); // the title: its first item is Play
-    else if (screen === 2) await (joined < seats ? tap(joined++, 'south') : tap(0, 'start')); // join: each seat, then start
-    else if (screen === 0) await r.run([{ pads: idle(), frames: 30 }]); // still loading
+    if (screen === 1) f = await tap(0, 'south'); // the title: its first item is Play
+    else if (screen === 2) f = await (joined < seats ? tap(joined++, 'south') : tap(0, 'start')); // join: each seat, then start
+    else if (screen === 0) f = (await r.run([{ pads: idle(), frames: 30 }], { fields: look })).fields; // still loading
     else throw new Error(`newcomer: the shell is on screen ${screen}, not the title, join or play`);
   }
   throw new Error('newcomer: did not reach play through the menus in 20 tries');
 }
 
 /** one playthrough; `blind` is the control (cues ignored) */
-async function play(gpu, seats, seed, blind, seconds = null) {
+async function play(gpu, input, seats, seed, blind, seconds = null) {
   const r = await Romdev.load({ cart, gpu, label: 'newcomer' });
   const rand = rng(seed);
   const log = [];
+  // what a look reads: the goal, the cues and the progress fields, returned by the request that ran the frames
+  const look = [CFG.goal.field, CFG.move.field, ...(CFG.press || []).map((p) => p.field), ...(CFG.progress || [])];
+  const stopWhen = 'equals' in CFG.goal ? { field: CFG.goal.field, equals: CFG.goal.equals } : { field: CFG.goal.field, atLeast: CFG.goal.atLeast };
   try {
-    const start = await enterPlay(r, seats);
+    const start = await enterPlay(r, seats, input);
+    const first = await r.run([{ pads: Array.from({ length: seats }, () => ({ buttons: [] })), frames: 1 }], { fields: look });
+    Object.assign(start, first.fields);
     const maxSeconds = seconds ?? +opt('seconds', CFG.maxSeconds || 120), t0 = r.frame, limit = t0 + Math.round(maxSeconds * 60);
     if (start['shell.players'] !== undefined && start['shell.players'] !== seats)
       throw new Error(`newcomer: ${start['shell.players']} player(s) in play, wanted ${seats}`);
@@ -99,18 +120,19 @@ async function play(gpu, seats, seed, blind, seconds = null) {
       });
       const others = Array.from({ length: seats - 1 }, () => ({ buttons: [] }));
       const segs = [];
+      const seg = (buttons, frames) => { const s = seat0Input(input, buttons); return { pads: [{ buttons: s.buttons }, ...others], keys: s.keys, frames }; };
       const carry = Math.min(pressLeft, react); // a press still held from the last look
-      segs.push({ pads: [{ buttons: [...held, ...pressButtons] }, ...others], frames: carry });
-      segs.push({ pads: [{ buttons: held }, ...others], frames: react - carry });
+      segs.push(seg([...held, ...pressButtons], carry));
+      segs.push(seg(held, react - carry));
       const p = presses.length ? Math.min(PRESS, LOOK - react) : 0;
-      segs.push({ pads: [{ buttons: [...move, ...presses] }, ...others], frames: p });
-      segs.push({ pads: [{ buttons: move }, ...others], frames: LOOK - react - p });
+      segs.push(seg([...move, ...presses], p));
+      segs.push(seg(move, LOOK - react - p));
       if (presses.length) { pressButtons = presses; pressLeft = PRESS - p; } else pressLeft = 0;
-      await r.run(segs);
-      f = await r.fields();
+      // one request: the frames, and the look that decides the next one; it ends early when the goal is reached
+      f = (await r.run(segs, { fields: look, stopWhen })).fields;
       log.push([r.frame - t0, ...cue.map((x) => +x.toFixed(2)), [...move, ...presses].join('+'), ...(CFG.progress || []).map((k) => f[k]), ...(CFG.press || []).map((p) => seat0(f[p.field]))]);
     }
-    await r.shot(join(OUT, `${gpu}-${seats}p-${blind ? 'control' : seed}-timeout.png`));
+    await r.shot(join(OUT, `${gpu}-${input}-${seats}p-${blind ? 'control' : seed}-timeout.png`));
     return { done: false, secs: maxSeconds, requests: r.calls, log, fields: Object.fromEntries((CFG.progress || []).map((k) => [k, f[k]])) };
   } finally {
     await r.close();
@@ -122,19 +144,21 @@ const seats = CFG.players > 1 ? [1, 2] : [1];
 const runs = +opt('runs', CFG.runs || 1), seed0 = +opt('seed', 1);
 for (const gpu of GPUS) {
   let slowest = 0;
-  for (const n of seats) {
-    for (let k = 0; k < runs; k++) {
-      const seed = seed0 + k + (n - 1) * 100;
-      const tag = `newcomer (${gpu}, ${n === 1 ? 'one player' : `${n} seats, seat 2 idle`}, seed ${seed})`;
-      const res = await play(gpu, n, seed, false);
-      writeFileSync(join(OUT, `${gpu}-${n}p-${seed}.json`), JSON.stringify(res.log));
-      if (res.done) { console.log(`ok   ${tag}: finished in ${res.secs} s (${res.requests} romdev requests)`); slowest = Math.max(slowest, +res.secs); }
-      else { console.log(`FAIL ${tag}: not finished in ${res.secs} s (${JSON.stringify(res.fields)}); its trace: out/newcomer/${gpu}-${n}p-${seed}.json`); failed++; }
+  for (const input of INPUTS) {
+    for (const n of seats) {
+      for (let k = 0; k < runs; k++) {
+        const seed = seed0 + k + (n - 1) * 100;
+        const tag = `newcomer (${gpu}, ${input === 'keys' ? 'keyboard' : 'pad'}, ${n === 1 ? 'one player' : `${n} seats, seat 2 idle`}, seed ${seed})`;
+        const res = await play(gpu, input, n, seed, false);
+        writeFileSync(join(OUT, `${gpu}-${input}-${n}p-${seed}.json`), JSON.stringify(res.log));
+        if (res.done) { console.log(`ok   ${tag}: finished in ${res.secs} s (${res.requests} romdev requests)`); slowest = Math.max(slowest, +res.secs); }
+        else { console.log(`FAIL ${tag}: not finished in ${res.secs} s (${JSON.stringify(res.fields)}); its trace: out/newcomer/${gpu}-${input}-${n}p-${seed}.json`); failed++; }
+      }
     }
   }
   if (!argv.includes('--no-control')) {
     const cap = +opt('seconds', CFG.maxSeconds || 120);
-    const res = await play(gpu, 1, seed0, true, slowest ? Math.min(cap, Math.max(20, Math.ceil(slowest * 2))) : cap);
+    const res = await play(gpu, INPUTS[0], 1, seed0, true, slowest ? Math.min(cap, Math.max(20, Math.ceil(slowest * 2))) : cap);
     if (res.done) { console.log(`FAIL newcomer control (${gpu}, cues ignored) finished in ${res.secs} s: the gate cannot tell a player who reads the cues from one who does not`); failed++; }
     else console.log(`ok   newcomer control (${gpu}, cues ignored): did not finish, as it must (${JSON.stringify(res.fields)}, ${res.requests} romdev requests)`);
   }

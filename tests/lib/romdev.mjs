@@ -96,14 +96,21 @@ export class Romdev {
     await this.call('input', { op: 'set', ports });
   }
 
-  /** a range in ONE request: [{ pads: [{ buttons }, ...], frames }, ...] held in turn (romdev input sequence).
-   * Send ranges, never a request per frame: a check reads the fields once at the end of a range. */
-  async run(segments) {
+  /** a range in ONE request: [{ pads: [{ buttons }, ...], keys?: ['w', 'space'], frames }, ...] held in turn (romdev
+   * input sequence; keys are SDL scancode names held on the keyboard, which drives player 0). Send ranges, never a
+   * request per frame. With `fields` (debug field names) the request also returns their values after the last frame
+   * ({ name: value }, as fields() gives them), so a look costs no second request; `stopWhen` ({ field, equals } or
+   * { field, atLeast }) ends the range the frame the field gets there. Returns { fields, stopped, framesRun }. */
+  async run(segments, { fields = null, stopWhen = null } = {}) {
     const steps = segments.filter((s) => s.frames > 0).map((s) => ({
-      input: { ports: s.pads.map((p) => Object.fromEntries((p?.buttons || []).map((b) => [BTN[b] || b, true]))) }, frames: s.frames }));
-    if (!steps.length) return;
-    await this.call('input', { op: 'sequence', steps });
-    this.frame += steps.reduce((n, s) => n + s.frames, 0);
+      input: { ports: s.pads.map((p) => Object.fromEntries((p?.buttons || []).map((b) => [BTN[b] || b, true]))), ...(s.keys?.length ? { keys: s.keys } : {}) }, frames: s.frames }));
+    if (!steps.length) return { fields: fields ? await this.fields() : null, stopped: false, framesRun: 0 };
+    const r = await this.call('input', { op: 'sequence', steps, ...(fields ? { fields } : {}), ...(stopWhen ? { stopWhen } : {}) });
+    if (steps.some((s) => s.input.keys) && r.keyboard === undefined) throw new Error('romdev dropped the keys of the input sequence: keys need romdev 0.155.0 or later');
+    if (r.keyboard === false) throw new Error('the cart did not ask for a keyboard (WC_FLAG_KEYBOARD): its keys reach nothing');
+    if (fields && !r.fields) throw new Error('romdev returned no fields with the input sequence: fields need romdev 0.155.0 or later');
+    this.frame += r.framesRun;
+    return { fields: r.fields || null, stopped: r.stopped || false, framesRun: r.framesRun };
   }
 
   /** every debug field as { name: value } (arrays as arrays) */
