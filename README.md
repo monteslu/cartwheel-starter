@@ -66,7 +66,7 @@ on-screen cues).
 |---|---|---|
 | prompts | no text names a button ("A: jump"); prompts name actions | a line that names a button |
 | programs | the program table has every draw state the game asks for (no red "no program" banner, nothing left out) at every preset and in a player's first frames; `./programs.sh` fixes it | a sphere in a material no table has |
-| newcomer | a bot that knows only the on-screen cues, reacts late and aims badly finishes level 1, alone and with an idle second seat | the same bot ignoring the cues |
+| newcomer | a bot that knows only the on-screen cues, reacts late and aims badly finishes level 1 on the keyboard and on a pad, alone and with an idle second seat | the same bot ignoring the cues |
 | grounding | nothing in the level floats | one thing lifted half a metre |
 | flash | every effect's flash meter reads at most 3 flashes a second (WCAG 2.3.1, Harding) | every effect strobing |
 | gates | the trail and the menus reach the same state on GL and WebGPU, with a real picture and no missing program state | each run one frame short |

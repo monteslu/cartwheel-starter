@@ -130,7 +130,8 @@ You cannot play it, so look at it, often:
   it is needed). Make jumps and timing forgiving (coyote time, a jump
   buffer); a mistake sends the player back a little, not to the start. A
   multiplayer game must be finishable with a second seat joined and idle.
-  Checked by `tests/newcomer.mjs`.
+  Checked by `tests/newcomer.mjs`, on the keyboard and on a pad: both sets
+  of bindings in `project.cwproj` must play the level.
 - **Nothing floats.** Every prop, pickup, platform and character stands on
   something. Build platforms as solid shapes down to the ground, put pickups
   on stands, keep feet on the floor while walking. Checked by
@@ -188,7 +189,7 @@ could not tell good from bad.
 |---|---|---|
 | prompts | the SDK's `tools/check-prompts.mjs` over `src/` and the scenes | `tests/fixtures/prompt-control.c`, which names a button |
 | programs | `tests/programs.mjs`: the autopilot cart's whole run at every preset, on Auto's rungs between presets and switched between High and Very Low half way, and the autopilot and the game through its menus as a player's machine runs them (no seed: the loading screen's warm-up, Auto graphics); fails on any draw state the program table lacks (the red banner) and names them | a sphere put in front of the camera in a material no table has |
-| newcomer | `tests/newcomer.mjs` | the same bot ignoring the cues |
+| newcomer | `tests/newcomer.mjs`: the bot plays level 1 on the keyboard (the `input.*` key bindings: w a s d and space) and again on a pad (the d-pad and its buttons), alone and with an idle second seat; one romdev request a look (the input sequence returns the cue fields and stops when the goal is reached) | the same bot ignoring the cues |
 | grounding | `tests/grounding.mjs` | one standing thing lifted 0.5 m |
 | gates | the engine's `tests/gate.mjs --hosts romdev` over `tests/gates.json`: the autopilot finishes the trail and the menus reach play, the same state on GL and WebGPU, a real picture, the text floor, no missing program state | each run one frame short |
 | text | the engine's `tools/check-text.mjs` over `tests/text.json`'s screens (title, join, play, finished, pause, settings, graphics) | the same screens at half text size |
