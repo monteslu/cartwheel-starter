@@ -60,3 +60,5 @@ physical+map+rep+nmap+ao+rmap+mmap+skin+senv+atest+tan+ds+sheen+aniso+l0401+xcsm
 standard+map+rep+instbig+nmap+ao+rmap+mmap+senv+atest+ds+l0401+xcsm_gi
 standard+map+rep+instbig+nmap+ao+rmap+mmap+senv+atest+ds+l0401+xcsm_plain_gi
 standard+map+rep+instbig+nmap+ao+rmap+mmap+senv+atest+ds+l0401
+depth+instbig+xterrainlow_csm_plain_gi
+standard+instbig+senv+l0401+xterrainlow_csm_plain_gi
