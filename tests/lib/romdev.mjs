@@ -31,6 +31,7 @@ const BTN = { back: 'select' }; // romdev takes the spatial names (south, east, 
 // frame. Past BASE requests plus PER_SECOND for each second of game time run, the next request throws, so a check
 // that loops fails at once instead of flooding the shared server.
 const BUDGET = { base: 40, perSecond: 10 };
+const STEP_MAX = 600; // frames a step request runs at most (10 s of game time)
 
 export class Romdev {
   constructor(session) { this.session = session; this.frame = 0; this.calls = 0; }
@@ -47,6 +48,7 @@ export class Romdev {
     try {
       res = await fetch(`${URL_BASE}/tool/${tool}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-romdev-session': this.session, ...(process.env.ROMDEV_AGENT ? { 'x-romdev-agent': process.env.ROMDEV_AGENT } : {}) }, body: JSON.stringify(args) });
     } catch (e) {
+      if (e.cause?.code === 'UND_ERR_HEADERS_TIMEOUT') throw new Error(`romdev at ${URL_BASE} took over 5 minutes to answer ${tool} (a busy shared server): run the check again when it is quieter`);
       throw new Error(`romdev is not running at ${URL_BASE} (${e.cause?.code || e.message}): start it (npx romdevtools, see AGENTS.md)`);
     }
     const text = await res.text();
@@ -76,7 +78,16 @@ export class Romdev {
     return r;
   }
 
-  async step(n = 1) { if (n > 0) { await this.call('frame', { op: 'step', frames: n }); this.frame += n; } }
+  /** n frames, in ranges of at most STEP_MAX frames: one request each (a request that runs for minutes on a busy server
+   * outlives the client's 5 minute wait for an answer) */
+  async step(n = 1) {
+    while (n > 0) {
+      const k = Math.min(n, STEP_MAX);
+      await this.call('frame', { op: 'step', frames: k });
+      this.frame += k;
+      n -= k;
+    }
+  }
   async stepTo(frame) { await this.step(frame - this.frame); }
 
   /** hold pads: [{ buttons: ['south', 'up'] }, ...] (pad 0, 1, ...); romdev takes no stick axes, so movement is the d-pad */

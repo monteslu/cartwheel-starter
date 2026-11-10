@@ -77,7 +77,7 @@ no MCP client. `<app>` is `app` in `project.cwproj`.
 | check | `./test.sh [--gpu gl\|webgpu] [check ...]` | builds, then every check below through romdev, each with its control (GL and WebGPU legs at once); the output is also in `out/test.log` |
 | play | `./run.sh` | the game in a window (for a human; agents look through `./shot.sh`) |
 | one check | `./test.sh --gpu gl newcomer` (or prompts, programs, grounding, gates, text, budget) | while you work on one thing; the whole `./test.sh` before you call it done |
-| tables | `./programs.sh` | when `./test.sh programs` fails (a new material, light setup, scenery or effect): surveys the carts, regenerates `programs/` and builds it in. Otherwise the game shows a red "no program" banner and leaves those draws out |
+| tables | `./programs.sh` | when `./test.sh programs` fails (a new material, light setup, scenery or effect): plays the check's own runs on GL and WebGPU, adds what they lacked to `programs/game.txt`, regenerates the C and builds it in (a few minutes; `--full` adds the engine's whole survey). Otherwise the game shows a red "no program" banner and leaves those draws out |
 
 Work in small steps. After each one: build, look, check. A change is done
 when `./test.sh` is green on GL and WebGPU **and** you have looked at the
@@ -187,7 +187,7 @@ could not tell good from bad.
 | Check | File | Its control |
 |---|---|---|
 | prompts | the SDK's `tools/check-prompts.mjs` over `src/` and the scenes | `tests/fixtures/prompt-control.c`, which names a button |
-| programs | `tests/programs.mjs`: the autopilot cart's whole run at every preset, and the autopilot and the game through its menus as a player's machine runs them (no seed: the loading screen's warm-up, Auto graphics); fails on any draw state the program table lacks (the red banner) and names them | a sphere put in front of the camera in a material no table has |
+| programs | `tests/programs.mjs`: the autopilot cart's whole run at every preset, on Auto's rungs between presets and switched between High and Very Low half way, and the autopilot and the game through its menus as a player's machine runs them (no seed: the loading screen's warm-up, Auto graphics); fails on any draw state the program table lacks (the red banner) and names them | a sphere put in front of the camera in a material no table has |
 | newcomer | `tests/newcomer.mjs` | the same bot ignoring the cues |
 | grounding | `tests/grounding.mjs` | one standing thing lifted 0.5 m |
 | gates | the engine's `tests/gate.mjs --hosts romdev` over `tests/gates.json`: the autopilot finishes the trail and the menus reach play, the same state on GL and WebGPU, a real picture, the text floor, no missing program state | each run one frame short |

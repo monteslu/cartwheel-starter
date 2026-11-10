@@ -4,7 +4,9 @@
 // the scenery or a preset path changes after ./programs.sh ran, so this check plays the game the ways a player meets it
 // and fails on any state it lacks, naming them:
 //   - the autopilot cart (<app>_auto) through its whole run (tests/game.json autopilot.frames) at every graphics
-//     preset, Very Low to Ultra (each preset draws states of its own);
+//     preset, Very Low to Ultra (each preset draws states of its own), and switched between High and Very Low half
+//     way, each way (content made for one preset drawn with the other's renderer), and on the three rungs Auto steps
+//     through between presets (High with medium shadows, Medium without ambient occlusion, Low with very low effects);
 //   - the autopilot cart and the play cart as a player's machine runs them: loaded with no seed, so the warm-up
 //     spreads over frames under the loading screen and Auto picks the graphics, and the play cart goes through its
 //     menus into play. A deterministic load does its warm-up inside one frame and never shows
@@ -15,14 +17,16 @@
 // spawn and set) in a material no game's table has (clearcoat, sheen, iridescence and anisotropy at once). A control
 // that passes means the check cannot see a missing state.
 //
-//   node tests/programs.mjs [--gpu gl|webgpu] [--no-control]
-import { readFileSync } from 'node:fs';
+//   node tests/programs.mjs [--gpu gl|webgpu] [--no-control] [--collect <file>]
+import { appendFileSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Romdev, project } from './lib/romdev.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const argv = process.argv.slice(2);
+// --collect <file>: append every state a run lacked to the file, one a line (./programs.sh adds them to the table)
+const COLLECT = argv.includes('--collect') ? resolve(argv[argv.indexOf('--collect') + 1]) : null;
 const GPUS = argv.includes('--gpu') ? [argv[argv.indexOf('--gpu') + 1]] : ['gl', 'webgpu'];
 const GAME = JSON.parse(readFileSync(join(ROOT, 'tests/game.json'), 'utf8'));
 const FRAMES = GAME.autopilot?.frames;
@@ -30,7 +34,13 @@ if (!(FRAMES > 0)) { console.error('tests/game.json: autopilot.frames (the frame
 const { cart, autoCart } = project(ROOT);
 const PRESETS = ['verylow', 'low', 'medium', 'high', 'ultra'];
 
-/** the states a run drew without a program (cw.three.missing_states: text, or its bytes) */
+/** the states a run drew without a program: the pipeline debug request's whole list (romdev's debugState listing cuts
+ * a long bytes field short, which once fed ./programs.sh half a state), else the cw.three.missing_states field */
+async function missingStates(r) {
+  const rep = await r.command('pipeline');
+  if (rep && typeof rep.missing_states === 'string') return rep.missing_states.split('\n').map((l) => l.trim()).filter(Boolean);
+  return missing(await r.fields());
+}
 function missing(f) {
   const v = f['cw.three.missing_states'];
   if (!v) return [];
@@ -52,10 +62,11 @@ function findCamera(node, path = null) {
 }
 
 /** one run: [label, the states it lacked, requests] */
-async function run(gpu, { label, cartPath, seed = 1, preset = null, menus = false, control = false }) {
+async function run(gpu, { label, cartPath, seed = 1, preset = null, set = [], switchTo = null, menus = false, control = false }) {
   const r = await Romdev.load({ cart: cartPath, gpu, seed, label: 'programs' });
   try {
     if (preset) await r.command(`quality ${preset}`);
+    for (const c of set) await r.command(`quality set ${c}`);
     if (control) {
       const t = await r.command('tree / 64');
       const cam = findCamera(t && t.tree ? t.tree : t);
@@ -77,8 +88,12 @@ async function run(gpu, { label, cartPath, seed = 1, preset = null, menus = fals
       }
       if (screen !== 3) throw new Error('programs: the game did not reach play through its menus');
       await r.run([{ pads: [{ buttons: [] }], frames: 600 }]);
+    } else if (switchTo) { /* the preset changed half way through the run, as a player's settings or Auto do */
+      await r.stepTo(Math.round(FRAMES / 2));
+      await r.command(`quality ${switchTo}`);
+      await r.stepTo(FRAMES);
     } else await r.stepTo(FRAMES);
-    return [label, missing(await r.fields()), r.calls];
+    return [label, await missingStates(r), r.calls];
   } finally {
     await r.close();
   }
@@ -88,6 +103,13 @@ let failed = 0, requests = 0;
 for (const gpu of GPUS) {
   const runs = [
     ...PRESETS.map((p) => ({ label: `autopilot at ${p}`, cartPath: autoCart, preset: p })),
+    // Auto's rungs between the presets (src/render/quality.c LADDER): a player on Auto steps through them
+    { label: 'autopilot on Auto\'s High rung with medium shadows', cartPath: autoCart, preset: 'high', set: ['shadows medium'] },
+    { label: 'autopilot on Auto\'s Medium rung without ambient occlusion', cartPath: autoCart, preset: 'medium', set: ['ssao off'] },
+    { label: 'autopilot on Auto\'s Low rung with very low effects', cartPath: autoCart, preset: 'low', set: ['effects verylow'] },
+    // content made for one preset drawn with another's renderer: the two farthest apart, each way
+    { label: 'autopilot from high, switched to verylow half way', cartPath: autoCart, preset: 'high', switchTo: 'verylow' },
+    { label: 'autopilot from verylow, switched to high half way', cartPath: autoCart, preset: 'verylow', switchTo: 'high' },
     { label: 'autopilot as a player runs it (no seed: the loading screen\'s warm-up, Auto graphics)', cartPath: autoCart, seed: null },
     { label: 'the game through its menus as a player runs it (no seed)', cartPath: cart, seed: null, menus: true },
   ];
@@ -100,8 +122,9 @@ for (const gpu of GPUS) {
       states.forEach((s) => lacked.add(s));
     } else console.log(`ok   programs (${gpu}) ${label}: every state drawn`);
   }
+  if (COLLECT) appendFileSync(COLLECT, [...lacked].map((x) => x + '\n').join(''));
   if (lacked.size) {
-    console.log(`FAIL programs (${gpu}): the table lacks ${lacked.size} state(s). Fix: ./programs.sh (it surveys these same runs and rebuilds), then ./test.sh programs`);
+    console.log(`FAIL programs (${gpu}): the table lacks ${lacked.size} state(s). Fix: ./programs.sh (it plays these same runs, adds what they lacked to programs/game.txt and rebuilds)`);
     failed++;
   }
   if (!argv.includes('--no-control')) {
